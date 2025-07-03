@@ -187,7 +187,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         println!("Processing rank {} from file: {}", rank_num, rank_path.display());
 
         // Create subdirectory for this rank
-        let rank_out_dir = out_path.join(format!("rank_{}", rank_num));
+        let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
         fs::create_dir(&rank_out_dir)?;
 
         let config = ParseConfig {
@@ -214,7 +214,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         }
 
         // Add link to this rank's page
-        rank_links.push((rank_num.clone(), format!("rank_{}/index.html", rank_num)));
+        rank_links.push((rank_num.clone(), format!("rank_{rank_num}/index.html")));
     }
 
     // Sort rank links by rank number
@@ -230,7 +230,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
     println!("Generated multi-rank report with {} ranks", rank_links.len());
     println!("Individual rank reports available in:");
     for (rank_num, _) in &rank_links {
-        println!("  - rank_{}/index.html", rank_num);
+        println!("  - rank_{rank_num}/index.html");
     }
 
     // No browser opening since no landing page yet
