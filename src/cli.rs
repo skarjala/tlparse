@@ -230,7 +230,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
     println!("Generated multi-rank report with {} ranks", rank_links.len());
     println!("Individual rank reports available in:");
     for (rank_num, _) in &rank_links {
-        println!("  - rank_{rank_num}/index.html");
+        println!("  - rank_{}/index.html", rank_num);
     }
 
     // No browser opening since no landing page yet
