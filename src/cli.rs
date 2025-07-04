@@ -154,16 +154,20 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         .flatten()
         .filter(|entry| {
             let path = entry.path();
-            path.is_file() &&
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.contains("rank_") && name.ends_with(".log"))
-                .unwrap_or(false)
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.contains("rank_") && name.ends_with(".log"))
+                    .unwrap_or(false)
         })
         .collect();
 
     if rank_files.is_empty() {
-        bail!("No rank log files found in directory {}", input_path.display());
+        bail!(
+            "No rank log files found in directory {}",
+            input_path.display()
+        );
     }
 
     let mut rank_links = Vec::new();
@@ -179,12 +183,19 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         // Extract rank number from filename
         let rank_num = if let Some(pos) = rank_name.find("rank_") {
             let after_rank = &rank_name[pos + 5..];
-            after_rank.chars().take_while(|c| c.is_ascii_digit()).collect::<String>()
+            after_rank
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
         } else {
             "unknown".to_string()
         };
 
-        println!("Processing rank {} from file: {}", rank_num, rank_path.display());
+        println!(
+            "Processing rank {} from file: {}",
+            rank_num,
+            rank_path.display()
+        );
 
         // Create subdirectory for this rank
         let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
@@ -227,7 +238,10 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
     // Core logic complete - no HTML generation yet
     // TODO - Add landing page HTML generation using template system
 
-    println!("Generated multi-rank report with {} ranks", rank_links.len());
+    println!(
+        "Generated multi-rank report with {} ranks",
+        rank_links.len()
+    );
     println!("Individual rank reports available in:");
     for (rank_num, _) in &rank_links {
         println!("  - rank_{}/index.html", rank_num);
