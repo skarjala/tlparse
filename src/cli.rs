@@ -194,12 +194,20 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         .flatten()
         .filter(|entry| {
             let path = entry.path();
-            path.is_file()
-                && path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.contains("rank_") && name.ends_with(".log"))
-                    .unwrap_or(false)
+            if !path.is_file() {
+                return false;
+            }
+
+            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+
+            if !filename.starts_with("rank_") || !filename.ends_with(".log") {
+                return false;
+            }
+
+            let middle = &filename[5..filename.len()-4]; // Remove "rank_" and ".log"
+            !middle.is_empty() && middle.chars().all(|c| c.is_ascii_digit())
         })
         .collect();
 
