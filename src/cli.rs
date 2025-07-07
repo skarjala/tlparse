@@ -6,6 +6,24 @@ use std::path::PathBuf;
 
 use tlparse::{parse_path, ParseConfig};
 
+// Main output filename used by both single rank and multi-rank processing
+const MAIN_OUTPUT_FILENAME: &str = "index.html";
+
+// Helper function to setup output directory (handles overwrite logic)
+fn setup_output_directory(out_path: &PathBuf, overwrite: bool) -> anyhow::Result<()> {
+    if out_path.exists() {
+        if !overwrite {
+            bail!(
+                "Directory {} already exists, use -o OUTDIR to write to another location or pass --overwrite to overwrite the old contents",
+                out_path.display()
+            );
+        }
+        fs::remove_dir_all(&out_path)?;
+    }
+    fs::create_dir(&out_path)?;
+    Ok(())
+}
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -47,15 +65,15 @@ pub struct Cli {
     /// For inductor provenance tracking highlighter
     #[arg(short, long)]
     inductor_provenance: bool,
-    /// Parse all ranks and generate a single unified page
+    /// Parse all ranks and generate a single unified HTML page
     #[arg(long)]
-    all_ranks: bool,
+    all_ranks_html: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    if cli.all_ranks {
+    if cli.all_ranks_html {
         return handle_all_ranks(&cli);
     }
 
@@ -84,17 +102,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let out_path = cli.out;
-
-    if out_path.exists() {
-        if !cli.overwrite {
-            bail!(
-                "Directory {} already exists, use -o OUTDIR to write to another location or pass --overwrite to overwrite the old contents",
-                out_path.display()
-            );
-        }
-        fs::remove_dir_all(&out_path)?;
-    }
-    fs::create_dir(&out_path)?;
+    setup_output_directory(&out_path, cli.overwrite)?;
 
     let config = ParseConfig {
         strict: cli.strict,
@@ -105,7 +113,7 @@ fn main() -> anyhow::Result<()> {
         plain_text: cli.plain_text,
         export: cli.export,
         inductor_provenance: cli.inductor_provenance,
-        all_ranks: cli.all_ranks,
+        all_ranks: cli.all_ranks_html,
     };
 
     let output = parse_path(&path, config)?;
@@ -124,29 +132,61 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Helper function to handle parsing and writing output for a single rank
+// Returns the relative path to the main output file within the rank directory
+fn handle_one_rank(
+    rank_path: &PathBuf,
+    rank_out_dir: &PathBuf,
+    cli: &Cli,
+) -> anyhow::Result<PathBuf> {
+    fs::create_dir(rank_out_dir)?;
+
+    let config = ParseConfig {
+        strict: cli.strict,
+        strict_compile_id: cli.strict_compile_id,
+        custom_parsers: Vec::new(),
+        custom_header_html: cli.custom_header_html.clone(),
+        verbose: cli.verbose,
+        plain_text: cli.plain_text,
+        export: cli.export,
+        inductor_provenance: cli.inductor_provenance,
+        all_ranks: false,
+    };
+
+    let output = parse_path(rank_path, config)?;
+
+    let mut main_output_path = None;
+
+    // Write output files to rank subdirectory
+    for (filename, content) in output {
+        let out_file = rank_out_dir.join(&filename);
+        if let Some(dir) = out_file.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        fs::write(out_file, content)?;
+
+        // Track the main output file (typically index.html)
+        if filename.file_name().and_then(|name| name.to_str()) == Some(MAIN_OUTPUT_FILENAME) {
+            main_output_path = Some(filename);
+        }
+    }
+
+    Ok(main_output_path.unwrap_or_else(|| PathBuf::from(MAIN_OUTPUT_FILENAME)))
+}
+
 // handle_all_ranks function with placeholder landing page
 fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
     let input_path = &cli.path;
 
     if !input_path.is_dir() {
         bail!(
-            "Input path {} must be a directory when using --all-ranks",
+            "Input path {} must be a directory when using --all-ranks-html",
             input_path.display()
         );
     }
 
     let out_path = &cli.out;
-
-    if out_path.exists() {
-        if !cli.overwrite {
-            bail!(
-                "Directory {} already exists, use -o OUTDIR to write to another location or pass --overwrite to overwrite the old contents",
-                out_path.display()
-            );
-        }
-        fs::remove_dir_all(&out_path)?;
-    }
-    fs::create_dir(&out_path)?;
+    setup_output_directory(out_path, cli.overwrite)?;
 
     // Find all rank log files in the directory
     let rank_files: Vec<_> = std::fs::read_dir(input_path)
@@ -181,14 +221,17 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             .unwrap_or("unknown");
 
         // Extract rank number from filename
-        let rank_num = if let Some(pos) = rank_name.find("rank_") {
-            let after_rank = &rank_name[pos + 5..];
-            after_rank
+        let rank_num = if let Some(after_rank) = rank_name.strip_prefix("rank_") {
+            let num_str = after_rank
                 .chars()
                 .take_while(|c| c.is_ascii_digit())
-                .collect::<String>()
+                .collect::<String>();
+            if num_str.is_empty() {
+                bail!("Could not extract rank number from filename: {}", rank_name);
+            }
+            num_str
         } else {
-            "unknown".to_string()
+            bail!("Filename does not contain 'rank_': {}", rank_name);
         };
 
         println!(
@@ -197,41 +240,19 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             rank_path.display()
         );
 
-        // Create subdirectory for this rank
+        // Create subdirectory for this rank and handle parsing
         let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
-        fs::create_dir(&rank_out_dir)?;
+        let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, cli)?;
 
-        let config = ParseConfig {
-            strict: cli.strict,
-            strict_compile_id: cli.strict_compile_id,
-            custom_parsers: Vec::new(),
-            custom_header_html: cli.custom_header_html.clone(),
-            verbose: cli.verbose,
-            plain_text: cli.plain_text,
-            export: cli.export,
-            inductor_provenance: cli.inductor_provenance,
-            all_ranks: false,
-        };
-
-        let output = parse_path(&rank_path, config)?;
-
-        // Write output files to rank subdirectory
-        for (filename, content) in output {
-            let out_file = rank_out_dir.join(filename);
-            if let Some(dir) = out_file.parent() {
-                fs::create_dir_all(dir)?;
-            }
-            fs::write(out_file, content)?;
-        }
-
-        // Add link to this rank's page
-        rank_links.push((rank_num.clone(), format!("rank_{rank_num}/index.html")));
+        // Add link to this rank's page using the actual output path
+        let rank_link = format!("rank_{rank_num}/{}", main_output_path.display());
+        rank_links.push((rank_num.clone(), rank_link));
     }
 
     // Sort rank links by rank number
     rank_links.sort_by(|a, b| {
-        let a_num: i32 = a.0.parse().unwrap_or(999);
-        let b_num: i32 = b.0.parse().unwrap_or(999);
+        let a_num: i32 = a.0.parse().expect(&format!("Failed to parse rank number from '{}'", a.0));
+        let b_num: i32 = b.0.parse().expect(&format!("Failed to parse rank number from '{}'", b.0));
         a_num.cmp(&b_num)
     });
 
