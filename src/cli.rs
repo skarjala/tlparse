@@ -206,7 +206,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
                 return false;
             }
 
-            let middle = &filename[5..filename.len()-4]; // Remove "rank_" and ".log"
+            let middle = &filename[5..filename.len() - 4]; // Remove "rank_" and ".log"
             !middle.is_empty() && middle.chars().all(|c| c.is_ascii_digit())
         })
         .collect();
@@ -259,8 +259,12 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
 
     // Sort rank links by rank number
     rank_links.sort_by(|a, b| {
-        let a_num: i32 = a.0.parse().expect(&format!("Failed to parse rank number from '{}'", a.0));
-        let b_num: i32 = b.0.parse().expect(&format!("Failed to parse rank number from '{}'", b.0));
+        let a_num: i32 =
+            a.0.parse()
+                .expect(&format!("Failed to parse rank number from '{}'", a.0));
+        let b_num: i32 =
+            b.0.parse()
+                .expect(&format!("Failed to parse rank number from '{}'", b.0));
         a_num.cmp(&b_num)
     });
 
