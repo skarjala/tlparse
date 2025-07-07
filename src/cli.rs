@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let path = if cli.latest {
-        let input_path = cli.path;
+        let input_path = &cli.path;
         // Path should be a directory
         if !input_path.is_dir() {
             bail!(
@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
             );
         }
 
-        let last_modified_file = std::fs::read_dir(&input_path)
+        let last_modified_file = std::fs::read_dir(input_path)
             .with_context(|| format!("Couldn't access directory {}", input_path.display()))?
             .flatten()
             .filter(|f| f.metadata().unwrap().is_file())
@@ -98,33 +98,14 @@ fn main() -> anyhow::Result<()> {
         };
         last_modified_file.path()
     } else {
-        cli.path
+        cli.path.clone()
     };
 
-    let out_path = cli.out;
+    let out_path = cli.out.clone();
     setup_output_directory(&out_path, cli.overwrite)?;
 
-    let config = ParseConfig {
-        strict: cli.strict,
-        strict_compile_id: cli.strict_compile_id,
-        custom_parsers: Vec::new(),
-        custom_header_html: cli.custom_header_html.clone(),
-        verbose: cli.verbose,
-        plain_text: cli.plain_text,
-        export: cli.export,
-        inductor_provenance: cli.inductor_provenance,
-        all_ranks: cli.all_ranks_html,
-    };
-
-    let output = parse_path(&path, config)?;
-
-    for (filename, path) in output {
-        let out_file = out_path.join(filename);
-        if let Some(dir) = out_file.parent() {
-            fs::create_dir_all(dir)?;
-        }
-        fs::write(out_file, path)?;
-    }
+    // Use handle_one_rank for single rank processing (don't create directory since it already exists)
+    handle_one_rank(&path, &out_path, &cli, false)?;
 
     if !cli.no_browser {
         opener::open(out_path.join("index.html"))?;
@@ -138,8 +119,11 @@ fn handle_one_rank(
     rank_path: &PathBuf,
     rank_out_dir: &PathBuf,
     cli: &Cli,
+    create_output_dir: bool,
 ) -> anyhow::Result<PathBuf> {
-    fs::create_dir(rank_out_dir)?;
+    if create_output_dir {
+        fs::create_dir(rank_out_dir)?;
+    }
 
     let config = ParseConfig {
         strict: cli.strict,
@@ -203,10 +187,20 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             };
 
             // Only support PyTorch TORCH_TRACE files: dedicated_log_torch_trace_rank_0_hash.log
-            if !filename.starts_with("dedicated_log_torch_trace_rank_") || !filename.ends_with(".log") {
+            if !filename.starts_with("dedicated_log_torch_trace_rank_")
+                || !filename.ends_with(".log")
+            {
                 return false;
             }
 
+            // Extract rank number from the pattern
+            let after_prefix = &filename[31..]; // Remove "dedicated_log_torch_trace_rank_"
+            if let Some(underscore_pos) = after_prefix.find('_') {
+                let rank_part = &after_prefix[..underscore_pos];
+                return !rank_part.is_empty() && rank_part.chars().all(|c| c.is_ascii_digit());
+            }
+
+            false
             // Extract rank number from the pattern
             let after_prefix = &filename[31..]; // Remove "dedicated_log_torch_trace_rank_"
             if let Some(underscore_pos) = after_prefix.find('_') {
@@ -236,19 +230,26 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             .unwrap_or("unknown");
 
         // Extract rank number from PyTorch TORCH_TRACE filename
-        let rank_num = if let Some(after_prefix) = rank_name.strip_prefix("dedicated_log_torch_trace_rank_") {
-            if let Some(underscore_pos) = after_prefix.find('_') {
-                let rank_part = &after_prefix[..underscore_pos];
-                if rank_part.is_empty() || !rank_part.chars().all(|c| c.is_ascii_digit()) {
-                    bail!("Could not extract rank number from TORCH_TRACE filename: {}", rank_name);
+        let rank_num =
+            if let Some(after_prefix) = rank_name.strip_prefix("dedicated_log_torch_trace_rank_") {
+                if let Some(underscore_pos) = after_prefix.find('_') {
+                    let rank_part = &after_prefix[..underscore_pos];
+                    if rank_part.is_empty() || !rank_part.chars().all(|c| c.is_ascii_digit()) {
+                        bail!(
+                            "Could not extract rank number from TORCH_TRACE filename: {}",
+                            rank_name
+                        );
+                    }
+                    rank_part.to_string()
+                } else {
+                    bail!("Invalid TORCH_TRACE filename format: {}", rank_name);
                 }
-                rank_part.to_string()
             } else {
-                bail!("Invalid TORCH_TRACE filename format: {}", rank_name);
-            }
-        } else {
-            bail!("Filename does not match PyTorch TORCH_TRACE pattern: {}", rank_name);
-        };
+                bail!(
+                    "Filename does not match PyTorch TORCH_TRACE pattern: {}",
+                    rank_name
+                );
+            };
 
         println!(
             "Processing rank {} from file: {}",
@@ -257,7 +258,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         );
 
         let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
-        let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, cli)?;
+        let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, cli, true)?;
 
         // Add link to this rank's page using the actual output path
         let rank_link = format!("rank_{rank_num}/{}", main_output_path.display());
@@ -266,6 +267,12 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
 
     // Sort rank links by rank number
     rank_links.sort_by(|a, b| {
+        let a_num: i32 =
+            a.0.parse()
+                .expect(&format!("Failed to parse rank number from '{}'", a.0));
+        let b_num: i32 =
+            b.0.parse()
+                .expect(&format!("Failed to parse rank number from '{}'", b.0));
         let a_num: i32 =
             a.0.parse()
                 .expect(&format!("Failed to parse rank number from '{}'", a.0));
@@ -302,11 +309,41 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
     let landing_html = tt.render("multi_rank_index.html", &context)?;
 
     fs::write(out_path.join("index.html"), landing_html)?;
+    // Generate landing page HTML using template system
+    use tinytemplate::TinyTemplate;
+    use tlparse::{MultiRankContext, RankInfo, CSS, JAVASCRIPT, TEMPLATE_MULTI_RANK_INDEX};
+
+    let mut tt = TinyTemplate::new();
+    tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
+    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
+
+    let ranks: Vec<RankInfo> = rank_links
+        .iter()
+        .map(|(rank_num, link)| RankInfo {
+            number: rank_num.clone(),
+            link: link.clone(),
+        })
+        .collect();
+
+    let context = MultiRankContext {
+        css: CSS,
+        javascript: JAVASCRIPT,
+        custom_header_html: cli.custom_header_html.clone(),
+        rank_count: rank_links.len(),
+        ranks,
+    };
+
+    let landing_html = tt.render("multi_rank_index.html", &context)?;
+
+    fs::write(out_path.join("index.html"), landing_html)?;
 
     println!(
         "Generated multi-rank report with {} ranks",
         rank_links.len()
     );
+
+    if !cli.no_browser {
+        opener::open(out_path.join("index.html"))?;
 
     if !cli.no_browser {
         opener::open(out_path.join("index.html"))?;
