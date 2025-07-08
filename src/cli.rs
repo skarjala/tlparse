@@ -202,12 +202,19 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
                 return false;
             };
 
-            if !filename.starts_with("rank_") || !filename.ends_with(".log") {
+            // Only support PyTorch TORCH_TRACE files: dedicated_log_torch_trace_rank_0_hash.log
+            if !filename.starts_with("dedicated_log_torch_trace_rank_") || !filename.ends_with(".log") {
                 return false;
             }
 
-            let middle = &filename[5..filename.len() - 4]; // Remove "rank_" and ".log"
-            !middle.is_empty() && middle.chars().all(|c| c.is_ascii_digit())
+            // Extract rank number from the pattern
+            let after_prefix = &filename[31..]; // Remove "dedicated_log_torch_trace_rank_"
+            if let Some(underscore_pos) = after_prefix.find('_') {
+                let rank_part = &after_prefix[..underscore_pos];
+                return !rank_part.is_empty() && rank_part.chars().all(|c| c.is_ascii_digit());
+            }
+
+            false
         })
         .collect();
 
@@ -228,18 +235,19 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             .and_then(|name| name.to_str())
             .unwrap_or("unknown");
 
-        // Extract rank number from filename
-        let rank_num = if let Some(after_rank) = rank_name.strip_prefix("rank_") {
-            let num_str = after_rank
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect::<String>();
-            if num_str.is_empty() {
-                bail!("Could not extract rank number from filename: {}", rank_name);
+        // Extract rank number from PyTorch TORCH_TRACE filename
+        let rank_num = if let Some(after_prefix) = rank_name.strip_prefix("dedicated_log_torch_trace_rank_") {
+            if let Some(underscore_pos) = after_prefix.find('_') {
+                let rank_part = &after_prefix[..underscore_pos];
+                if rank_part.is_empty() || !rank_part.chars().all(|c| c.is_ascii_digit()) {
+                    bail!("Could not extract rank number from TORCH_TRACE filename: {}", rank_name);
+                }
+                rank_part.to_string()
+            } else {
+                bail!("Invalid TORCH_TRACE filename format: {}", rank_name);
             }
-            num_str
         } else {
-            bail!("Filename does not contain 'rank_': {}", rank_name);
+            bail!("Filename does not match PyTorch TORCH_TRACE pattern: {}", rank_name);
         };
 
         println!(
