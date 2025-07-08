@@ -248,7 +248,6 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             rank_path.display()
         );
 
-        // Create subdirectory for this rank and handle parsing
         let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
         let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, cli)?;
 
@@ -268,20 +267,42 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         a_num.cmp(&b_num)
     });
 
-    // Core logic complete - no HTML generation yet
-    // TODO - Add landing page HTML generation using template system
+    // Generate landing page HTML using template system
+    use tinytemplate::TinyTemplate;
+    use tlparse::{MultiRankContext, RankInfo, CSS, JAVASCRIPT, TEMPLATE_MULTI_RANK_INDEX};
+
+    let mut tt = TinyTemplate::new();
+    tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
+    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
+
+    let ranks: Vec<RankInfo> = rank_links
+        .iter()
+        .map(|(rank_num, link)| RankInfo {
+            number: rank_num.clone(),
+            link: link.clone(),
+        })
+        .collect();
+
+    let context = MultiRankContext {
+        css: CSS,
+        javascript: JAVASCRIPT,
+        custom_header_html: cli.custom_header_html.clone(),
+        rank_count: rank_links.len(),
+        ranks,
+    };
+
+    let landing_html = tt.render("multi_rank_index.html", &context)?;
+
+    fs::write(out_path.join("index.html"), landing_html)?;
 
     println!(
         "Generated multi-rank report with {} ranks",
         rank_links.len()
     );
-    println!("Individual rank reports available in:");
-    for (rank_num, _) in &rank_links {
-        println!("  - rank_{}/index.html", rank_num);
-    }
 
-    // No browser opening since no landing page yet
-    // TODO - Generate landing page and open browser
+    if !cli.no_browser {
+        opener::open(out_path.join("index.html"))?;
+    }
 
     Ok(())
 }
