@@ -201,14 +201,6 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
             }
 
             false
-            // Extract rank number from the pattern
-            let after_prefix = &filename[31..]; // Remove "dedicated_log_torch_trace_rank_"
-            if let Some(underscore_pos) = after_prefix.find('_') {
-                let rank_part = &after_prefix[..underscore_pos];
-                return !rank_part.is_empty() && rank_part.chars().all(|c| c.is_ascii_digit());
-            }
-
-            false
         })
         .collect();
 
@@ -273,42 +265,9 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         let b_num: i32 =
             b.0.parse()
                 .expect(&format!("Failed to parse rank number from '{}'", b.0));
-        let a_num: i32 =
-            a.0.parse()
-                .expect(&format!("Failed to parse rank number from '{}'", a.0));
-        let b_num: i32 =
-            b.0.parse()
-                .expect(&format!("Failed to parse rank number from '{}'", b.0));
         a_num.cmp(&b_num)
     });
 
-    // Generate landing page HTML using template system
-    use tinytemplate::TinyTemplate;
-    use tlparse::{MultiRankContext, RankInfo, CSS, JAVASCRIPT, TEMPLATE_MULTI_RANK_INDEX};
-
-    let mut tt = TinyTemplate::new();
-    tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
-    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
-
-    let ranks: Vec<RankInfo> = rank_links
-        .iter()
-        .map(|(rank_num, link)| RankInfo {
-            number: rank_num.clone(),
-            link: link.clone(),
-        })
-        .collect();
-
-    let context = MultiRankContext {
-        css: CSS,
-        javascript: JAVASCRIPT,
-        custom_header_html: cli.custom_header_html.clone(),
-        rank_count: rank_links.len(),
-        ranks,
-    };
-
-    let landing_html = tt.render("multi_rank_index.html", &context)?;
-
-    fs::write(out_path.join("index.html"), landing_html)?;
     // Generate landing page HTML using template system
     use tinytemplate::TinyTemplate;
     use tlparse::{MultiRankContext, RankInfo, CSS, JAVASCRIPT, TEMPLATE_MULTI_RANK_INDEX};
@@ -341,9 +300,6 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
         "Generated multi-rank report with {} ranks",
         rank_links.len()
     );
-
-    if !cli.no_browser {
-        opener::open(out_path.join("index.html"))?;
 
     if !cli.no_browser {
         opener::open(out_path.join("index.html"))?;
