@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     if cli.all_ranks_html {
-        return handle_all_ranks(&cli);
+        return handle_all_ranks(cli);
     }
 
     let path = if cli.latest {
@@ -159,7 +159,7 @@ fn handle_one_rank(
 }
 
 // handle_all_ranks function with placeholder landing page
-fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
+fn handle_all_ranks(cli: Cli) -> anyhow::Result<()> {
     let input_path = &cli.path;
 
     if !input_path.is_dir() {
@@ -251,7 +251,7 @@ fn handle_all_ranks(cli: &Cli) -> anyhow::Result<()> {
 
         // Create subdirectory for this rank and handle parsing
         let rank_out_dir = out_path.join(format!("rank_{rank_num}"));
-        let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, cli, true)?;
+        let main_output_path = handle_one_rank(&rank_path, &rank_out_dir, &cli, true)?;
 
         // Add link to this rank's page using the actual output path from handle_one_rank
         let rank_link = format!("rank_{}/{}", rank_num, main_output_path.display());
