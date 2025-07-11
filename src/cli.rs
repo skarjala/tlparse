@@ -91,7 +91,6 @@ fn main() -> anyhow::Result<()> {
     }
     fs::create_dir(&out_path)?;
 
-    // Parse log file and write output
     let config = ParseConfig {
         strict: cli.strict,
         strict_compile_id: cli.strict_compile_id,
@@ -129,7 +128,6 @@ fn parse_and_write_output(
         }
         fs::write(out_file, content)?;
 
-        // Track the main output file (typically index.html)
         if filename.file_name().and_then(|name| name.to_str()) == Some(MAIN_OUTPUT_FILENAME) {
             main_output_path = Some(filename);
         }
