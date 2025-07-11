@@ -304,7 +304,7 @@ fn handle_guard(
     });
 }
 
-pub fn parse_path(path: &PathBuf, config: ParseConfig) -> anyhow::Result<ParseOutput> {
+pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseOutput> {
     let strict = config.strict;
     if !path.is_file() {
         bail!("{} is not a file", path.display())
@@ -442,8 +442,6 @@ pub fn parse_path(path: &PathBuf, config: ParseConfig) -> anyhow::Result<ParseOu
         })
         .peekable();
 
-    let mut all_parsers = default_parsers(&tt, &config);
-    all_parsers.extend(config.custom_parsers);
     let mut chromium_events: Vec<serde_json::Value> = Vec::new();
 
     while let Some((lineno, line)) = iter.next() {
@@ -664,9 +662,11 @@ pub fn parse_path(path: &PathBuf, config: ParseConfig) -> anyhow::Result<ParseOu
         // TODO: output should be able to generate this without explicitly creating
         let compile_directory = directory.entry(compile_id_entry).or_default();
 
-        let mut parser_payload_filename = ParserResult::NoPayload;
-        for parser in &all_parsers {
-            let result = run_parser(
+        let default_parsers = default_parsers(&tt, config);
+        let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
+        all_parsers.extend(config.custom_parsers.iter());
+        for parser in all_parsers {
+            run_parser(
                 lineno,
                 parser,
                 &e,
@@ -959,7 +959,7 @@ pub fn parse_path(path: &PathBuf, config: ParseConfig) -> anyhow::Result<ParseOu
         let index_context = ExportIndexContext {
             css: EXPORT_CSS,
             javascript: JAVASCRIPT,
-            custom_header_html: config.custom_header_html,
+            custom_header_html: config.custom_header_html.clone(),
             directory: directory
                 .drain(..)
                 .map(|(x, y)| (x.map_or("(unknown)".to_string(), |e| e.to_string()), y))
@@ -1015,7 +1015,7 @@ pub fn parse_path(path: &PathBuf, config: ParseConfig) -> anyhow::Result<ParseOu
     let index_context = IndexContext {
         css: CSS,
         javascript: JAVASCRIPT,
-        custom_header_html: config.custom_header_html,
+        custom_header_html: config.custom_header_html.clone(),
         directory: directory
             .drain(..)
             .map(|(x, y)| (x.map_or("(unknown)".to_string(), |e| e.to_string()), y))
