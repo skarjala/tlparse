@@ -6,9 +6,6 @@ use std::path::PathBuf;
 
 use tlparse::{parse_path, ParseConfig};
 
-// Main output filename used by both single rank and multi-rank processing
-const MAIN_OUTPUT_FILENAME: &str = "index.html";
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -59,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let path = if cli.latest {
-        let input_path = &cli.path;
+        let input_path = cli.path;
         // Path should be a directory
         if !input_path.is_dir() {
             bail!(
@@ -79,7 +76,7 @@ fn main() -> anyhow::Result<()> {
         };
         last_modified_file.path()
     } else {
-        cli.path.clone()
+        cli.path
     };
 
     if cli.all_ranks_html {
