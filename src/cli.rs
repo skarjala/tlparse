@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let path = if cli.latest {
-        let input_path = &cli.path;
+        let input_path = cli.path;
         // Path should be a directory
         if !input_path.is_dir() {
             bail!(
@@ -76,10 +76,10 @@ fn main() -> anyhow::Result<()> {
         };
         last_modified_file.path()
     } else {
-        cli.path.clone()
+        cli.path
     };
 
-    let out_path = cli.out.clone();
+    let out_path = cli.out;
     if out_path.exists() {
         if !cli.overwrite {
             bail!(
@@ -91,7 +91,18 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Use handle_one_rank for single rank processing
-    handle_one_rank(&path, &out_path, &cli)?;
+    let config = ParseConfig {
+        strict: cli.strict,
+        strict_compile_id: cli.strict_compile_id,
+        custom_parsers: Vec::new(),
+        custom_header_html: cli.custom_header_html,
+        verbose: cli.verbose,
+        plain_text: cli.plain_text,
+        export: cli.export,
+        inductor_provenance: cli.inductor_provenance,
+    };
+    let per_rank_config = config;
+    parse_and_write_output(per_rank_config, &path, &out_path)?;
 
     if !cli.no_browser {
         opener::open(out_path.join(MAIN_OUTPUT_FILENAME))?;
@@ -101,10 +112,10 @@ fn main() -> anyhow::Result<()> {
 
 // Helper function to handle parsing and writing output for a single rank
 // Returns the relative path to the main output file within the rank directory
-fn handle_one_rank(
-    rank_path: &PathBuf,
+fn parse_and_write_output(
+    config: ParseConfig,
+    path: &PathBuf,
     rank_out_dir: &PathBuf,
-    cli: &Cli,
 ) -> anyhow::Result<PathBuf> {
     let config = ParseConfig {
         strict: cli.strict,
