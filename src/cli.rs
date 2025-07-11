@@ -89,8 +89,9 @@ fn main() -> anyhow::Result<()> {
         }
         fs::remove_dir_all(&out_path)?;
     }
+    fs::create_dir(&out_path)?;
 
-    // Use handle_one_rank for single rank processing
+    // Parse log file and write output
     let config = ParseConfig {
         strict: cli.strict,
         strict_compile_id: cli.strict_compile_id,
@@ -110,19 +111,19 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-// Helper function to handle parsing and writing output for a single rank
-// Returns the relative path to the main output file within the rank directory
+// Helper function to parse a log file and write output to a directory
+// Returns the relative path to the main output file within the output directory
 fn parse_and_write_output(
     config: ParseConfig,
-    path: &PathBuf,
-    rank_out_dir: &PathBuf,
+    log_path: &PathBuf,
+    output_dir: &PathBuf,
 ) -> anyhow::Result<PathBuf> {
-    let output = parse_path(&path, config)?;
+    let output = parse_path(log_path, config)?;
     let mut main_output_path = None;
 
     // Write output files to output directory
     for (filename, content) in output {
-        let out_file = rank_out_dir.join(&filename);
+        let out_file = output_dir.join(&filename);
         if let Some(dir) = out_file.parent() {
             fs::create_dir_all(dir)?;
         }
