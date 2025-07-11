@@ -1,0 +1,101 @@
+
+import torch
+from torch import tensor, device
+import torch.fx as fx
+from torch._dynamo.testing import rand_strided
+from math import inf
+import torch._inductor.inductor_prims
+
+import torch._dynamo.config
+import torch._inductor.config
+import torch._functorch.config
+import torch.fx.experimental._config
+torch._dynamo.config.traceable_tensor_subclasses = set()
+torch._dynamo.config.suppress_errors = False
+torch._dynamo.config._ddp_optimization_mode = ['ddp_optimizer', 'python_reducer', 'python_reducer_without_compiled_forward', 'no_optimization']
+torch._dynamo.config.raise_on_ctx_manager_usage = True
+torch._dynamo.config._save_config_ignore = {'constant_functions', 'skipfiles_inline_module_allowlist', 'repro_after', 'repro_level'}
+torch._dynamo.config.log_compilation_metrics = False
+torch._dynamo.config.reorderable_logging_functions = set()
+torch._inductor.config.debug = True
+torch._inductor.config.fx_graph_cache = True
+torch._inductor.config.pre_grad_fusion_options = {}
+torch._inductor.config.post_grad_fusion_options = {}
+torch._inductor.config.fx_passes_numeric_check = {'pre_grad': False, 'precision': 0.0001, 'num_iterations': 1, 'requires_optimizer': True}
+torch._inductor.config.reorder_for_compute_comm_overlap_passes = ['reorder_compute_for_overlap', 'sink_waits', 'raise_comms']
+torch._inductor.config.implicit_fallbacks = True
+torch._inductor.config.debug_index_asserts = True
+torch._inductor.config._fuse_ddp_communication_passes = ['fuse_ddp_with_concat_op', 'schedule_comm_wait']
+torch._inductor.config.generate_intermediate_hooks = True
+torch._inductor.config.cpp.min_chunk_size = 1
+torch._inductor.config.triton.autotune_pointwise = False
+torch._inductor.config.aot_inductor.metadata = {}
+torch._inductor.config.aot_inductor.presets = {}
+torch._inductor.config.rocm.arch = []
+torch._inductor.config.rocm.ck_supported_arch = ['gfx90a', 'gfx940', 'gfx941', 'gfx942']
+torch._inductor.config._save_config_ignore = ['trace.upload_tar', 'joint_custom_pre_pass', 'joint_custom_post_pass', 'pre_grad_custom_pass']
+torch._inductor.config._cache_config_ignore_prefix = ['trace', 'cuda.cutlass_dir', 'worker_start_method', 'compile_threads', 'post_grad_custom_post_pass', 'post_grad_custom_pre_pass', 'always_complex_memory_overlap_TESTING_ONLY']
+torch._inductor.config.external_matmul = []
+torch._functorch.config.functionalize_rng_ops = False
+torch._functorch.config.enable_autograd_cache = True
+torch._functorch.config.fake_tensor_allow_unsafe_data_ptr_access = True
+torch._functorch.config.unlift_effect_tokens = True
+
+
+
+isolate_fails_code_str = None
+
+
+
+
+# torch version: 2.6.0a0+giteece9ec
+# torch cuda version: 12.2
+# torch git version: eece9ecd62cae84bc2f915fc48cffe43e30256aa
+
+
+# CUDA Info: 
+# nvcc: NVIDIA (R) Cuda compiler driver 
+# Copyright (c) 2005-2023 NVIDIA Corporation 
+# Built on Tue_Aug_15_22:02:13_PDT_2023 
+# Cuda compilation tools, release 12.2, V12.2.140 
+# Build cuda_12.2.r12.2/compiler.33191640_0 
+
+# GPU Hardware Info: 
+# NVIDIA H100 : 8 
+
+
+from torch.nn import *
+class Repro(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    
+    
+    def forward(self, arg0_1):
+        mul = torch.ops.aten.mul.Tensor(arg0_1, 0.5)
+        mul_1 = torch.ops.aten.mul.Tensor(arg0_1, 0.7071067811865476);  arg0_1 = None
+        erf = torch.ops.aten.erf.default(mul_1);  mul_1 = None
+        add = torch.ops.aten.add.Tensor(erf, 1);  erf = None
+        mul_2 = torch.ops.aten.mul.Tensor(mul, add);  mul = add = None
+        inductor_seeds_default = torch.ops.prims.inductor_seeds.default(1, device(type='cuda', index=0))
+        inductor_lookup_seed_default = torch.ops.prims.inductor_lookup_seed.default(inductor_seeds_default, 0);  inductor_seeds_default = None
+        inductor_random_default = torch.ops.prims.inductor_random.default([1, 320, 128, 128], inductor_lookup_seed_default, 'rand');  inductor_lookup_seed_default = None
+        clone = torch.ops.aten.clone.default(inductor_random_default, memory_format = torch.channels_last);  inductor_random_default = None
+        gt = torch.ops.aten.gt.Scalar(clone, 0.1);  clone = None
+        mul_3 = torch.ops.aten.mul.Tensor(gt, mul_2);  gt = mul_2 = None
+        mul_4 = torch.ops.aten.mul.Tensor(mul_3, 1.1111111111111112);  mul_3 = None
+        baz = torch.ops.test.baz.default(mul_4);  mul_4 = None
+        return (baz,)
+        
+def load_args(reader):
+    buf0 = reader.storage(None, 20971520, device=device(type='cuda', index=0))
+    reader.tensor(buf0, (1, 320, 128, 128), (5242880, 1, 40960, 320), is_leaf=True)  # arg0_1
+load_args._version = 0
+mod = Repro()
+if __name__ == '__main__':
+    from torch._dynamo.repro.after_aot import run_repro
+    with torch.no_grad():
+        run_repro(mod, load_args, accuracy=False, command='run', save_dir=None, tracing_mode='real', check_str=None)
+        # To run it separately, do 
+        # mod, args = run_repro(mod, load_args, accuracy=False, command='get_args', save_dir=None, tracing_mode='real', check_str=None)
+        # mod(*args)

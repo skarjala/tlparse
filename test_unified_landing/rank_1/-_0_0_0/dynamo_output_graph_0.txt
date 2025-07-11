@@ -1,0 +1,14 @@
+class GraphModule(torch.nn.Module):
+    def forward(self, L_x_: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0"):
+        l_x_ = L_x_
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11119 in helper, code: out = F.gelu(x)
+        out: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch._C._nn.gelu(l_x_);  l_x_ = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11120 in helper, code: out = self.in_layers(out)
+        input_1: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.nn.functional.dropout(out, 0.1, True, False);  out = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11125 in forward, code: out = torch.ops.test.baz(out)
+        out_1: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.test.baz(input_1);  input_1 = None
+        return (out_1,)
+        

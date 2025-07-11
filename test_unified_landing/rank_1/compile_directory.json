@@ -1,0 +1,69 @@
+{
+  "[-/-]": {
+    "artifacts": []
+  },
+  "[0/0]": {
+    "artifacts": [
+      {
+        "name": "dynamo_output_graph_0.txt",
+        "number": 0,
+        "suffix": "",
+        "url": "-_0_0_0/dynamo_output_graph_0.txt"
+      },
+      {
+        "name": "aot_forward_graph_fw_metadata_1.txt",
+        "number": 1,
+        "suffix": "",
+        "url": "-_0_0_0/aot_forward_graph_fw_metadata_1.txt"
+      },
+      {
+        "name": "aot_inference_graph_2.txt",
+        "number": 2,
+        "suffix": "",
+        "url": "-_0_0_0/aot_inference_graph_2.txt"
+      },
+      {
+        "name": "fx_graph_runnable_3.txt",
+        "number": 3,
+        "suffix": "",
+        "url": "-_0_0_0/fx_graph_runnable_3.txt"
+      },
+      {
+        "name": "inductor_post_grad_graph_4.txt",
+        "number": 4,
+        "suffix": "",
+        "url": "-_0_0_0/inductor_post_grad_graph_4.txt"
+      },
+      {
+        "name": "inductor_output_code_cyjwx6x6efpuwt4dvr4ev42v4ghac5zo2uggvscht2otwnesito6_5.html",
+        "number": 5,
+        "suffix": "",
+        "url": "-_0_0_0/inductor_output_code_cyjwx6x6efpuwt4dvr4ev42v4ghac5zo2uggvscht2otwnesito6_5.html"
+      },
+      {
+        "name": "fx_graph_cache_miss_6.json",
+        "number": 6,
+        "suffix": "❌",
+        "url": "-_0_0_0/fx_graph_cache_miss_6.json"
+      },
+      {
+        "name": "aotautograd_cache_hash_7.json",
+        "number": 7,
+        "suffix": "",
+        "url": "-_0_0_0/aotautograd_cache_hash_7.json"
+      },
+      {
+        "name": "dynamo_cpp_guards_str_8.txt",
+        "number": 8,
+        "suffix": "",
+        "url": "-_0_0_0/dynamo_cpp_guards_str_8.txt"
+      },
+      {
+        "name": "compilation_metrics_9.html",
+        "number": 9,
+        "suffix": "",
+        "url": "-_0_0_0/compilation_metrics_9.html"
+      }
+    ]
+  }
+}

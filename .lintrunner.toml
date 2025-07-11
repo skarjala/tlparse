@@ -1,0 +1,187 @@
+[[linter]]
+code = 'RUSTFMT'
+include_patterns = ['**/*.rs']
+exclude_patterns = [
+    'target/**',
+]
+command = [
+    'rustfmt',
+    '--check',
+    '--',
+    '@{{PATHSFILE}}'
+]
+is_formatter = true
+
+[[linter]]
+code = 'CLIPPY'
+include_patterns = ['**/*.rs']
+exclude_patterns = [
+    'target/**',
+]
+command = [
+    'cargo',
+    'clippy',
+    '--all-targets',
+    '--all-features',
+    '--',
+    '-D',
+    'warnings'
+]
+
+[[linter]]
+code = 'NEWLINE'
+include_patterns = ['**']
+exclude_patterns = [
+    'target/**',
+    '**/*.png',
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.gif',
+    '**/*.ico',
+    '**/*.woff',
+    '**/*.woff2',
+    '**/*.ttf',
+    '**/*.eot',
+    '**/*.svg',
+    '**/*.gz',
+    '**/*.zip',
+    '**/*.tar',
+    '**/*.log',
+    'Cargo.lock',
+]
+command = [
+    'python3',
+    '-c',
+    '''
+import sys
+import os
+
+def check_newline(filepath):
+    try:
+        with open(filepath, "rb") as f:
+            content = f.read()
+            if content and not content.endswith(b"\\n"):
+                print(f"{filepath}: File does not end with newline")
+                return False
+    except Exception as e:
+        print(f"{filepath}: Error reading file: {e}")
+        return False
+    return True
+
+success = True
+for filepath in sys.argv[1:]:
+    if not check_newline(filepath):
+        success = False
+
+sys.exit(0 if success else 1)
+    ''',
+    '--',
+    '@{{PATHSFILE}}'
+]
+is_formatter = true
+
+[[linter]]
+code = 'SPACES'
+include_patterns = ['**']
+exclude_patterns = [
+    'target/**',
+    '**/*.png',
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.gif',
+    '**/*.ico',
+    '**/*.woff',
+    '**/*.woff2',
+    '**/*.ttf',
+    '**/*.eot',
+    '**/*.svg',
+    '**/*.gz',
+    '**/*.zip',
+    '**/*.tar',
+    '**/*.log',
+    'Cargo.lock',
+]
+command = [
+    'python3',
+    '-c',
+    '''
+import sys
+import re
+
+def check_trailing_spaces(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines, 1):
+                if re.search(r"[ \\t]+$", line):
+                    print(f"{filepath}:{i}: Line has trailing whitespace")
+                    return False
+    except Exception as e:
+        print(f"{filepath}: Error reading file: {e}")
+        return False
+    return True
+
+success = True
+for filepath in sys.argv[1:]:
+    if not check_trailing_spaces(filepath):
+        success = False
+
+sys.exit(0 if success else 1)
+    ''',
+    '--',
+    '@{{PATHSFILE}}'
+]
+
+[[linter]]
+code = 'TABS'
+include_patterns = ['**']
+exclude_patterns = [
+    'target/**',
+    '**/*.png',
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.gif',
+    '**/*.ico',
+    '**/*.woff',
+    '**/*.woff2',
+    '**/*.ttf',
+    '**/*.eot',
+    '**/*.svg',
+    '**/*.gz',
+    '**/*.zip',
+    '**/*.tar',
+    '**/*.log',
+    'Cargo.lock',
+    '**/Makefile',
+    '**/*.mk',
+    '.lintrunner.toml',
+]
+command = [
+    'python3',
+    '-c',
+    '''
+import sys
+
+def check_tabs(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines, 1):
+                if "\\t" in line:
+                    print(f"{filepath}:{i}: Line contains tabs; please use spaces")
+                    return False
+    except Exception as e:
+        print(f"{filepath}: Error reading file: {e}")
+        return False
+    return True
+
+success = True
+for filepath in sys.argv[1:]:
+    if not check_tabs(filepath):
+        success = False
+
+sys.exit(0 if success else 1)
+    ''',
+    '--',
+    '@{{PATHSFILE}}'
+]

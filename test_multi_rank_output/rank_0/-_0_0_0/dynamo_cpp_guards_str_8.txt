@@ -1,0 +1,70 @@
+
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:484 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['x'], accessed_by=DictGetItemGuardAccessor('x')
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[1, 320, 128, 128], stride=[5242880, 1, 40960, 320])
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False         
+| +- GuardManager: source=L['self'], accessed_by=DictGetItemGuardAccessor('self')
+| | +- TYPE_MATCH: ___check_type_id(L['self'], 184117680)                      
+| | +- GuardManager: source=L['self'].__dict__, accessed_by=GetGenericDictGuardAccessor
+| | | +- GuardManager: source=L['self']._modules, accessed_by=DictGetItemGuardAccessor('_modules')
+| | | | +- DICT_LENGTH: len(L['self']._modules) == 1                                
+| | | | +- GuardManager: source=L['self']._modules['in_layers'], accessed_by=DictGetItemGuardAccessor('in_layers')
+| | | | | +- TYPE_MATCH: ___check_type_id(L['self']._modules['in_layers'], 113588064)
+| | | | | +- LENGTH_CHECK: len(L['self']._modules['in_layers']) == 1                   
+| | | | | +- GuardManager: source=L['self']._modules['in_layers'].__dict__, accessed_by=GetGenericDictGuardAccessor
+| | | | | | +- DICT_CONTAINS: not ___dict_contains('forward', L['self']._modules['in_layers'].__dict__)
+| | | | | | +- DictGuardManager: source=L['self']._modules['in_layers']._modules, accessed_by=DictGetItemGuardAccessor('_modules')
+| | | | | | | +- KeyValueManager pair at index=0
+| | | | | | | | +- KeyManager: GuardManager: source=list(L['self']._modules['in_layers']._modules.keys())[0]
+| | | | | | | | | +- EQUALS_MATCH: list(L['self']._modules['in_layers']._modules.keys())[0] == '0'
+| | | | | | | | +- ValueManager: GuardManager: source=L['self']._modules['in_layers']._modules['0']
+| | | | | | | | | +- TYPE_MATCH: ___check_type_id(L['self']._modules['in_layers']._modules['0'], 111068416)
+| | | | | | | | | +- GuardManager: source=L['self']._modules['in_layers']._modules['0'].__dict__, accessed_by=GetGenericDictGuardAccessor
+| | | | | | | | | | +- DICT_CONTAINS: not ___dict_contains('forward', L['self']._modules['in_layers']._modules['0'].__dict__)
+| | | | | | | | | | +- GuardManager: source=L['self']._modules['in_layers']._modules['0'].p, accessed_by=DictGetItemGuardAccessor('p')
+| | | | | | | | | | | +- EQUALS_MATCH: L['self']._modules['in_layers']._modules['0'].p == 0.1      
+| | | | | | | | | | +- GuardManager: source=L['self']._modules['in_layers']._modules['0'].inplace, accessed_by=DictGetItemGuardAccessor('inplace')
+| | | | | | | | | | | +- ID_MATCH: ___check_obj_id(L['self']._modules['in_layers']._modules['0'].inplace, 8907584)
+| | | | | | | | | | +- GuardManager: source=L['self']._modules['in_layers']._modules['0'].training, accessed_by=DictGetItemGuardAccessor('training')
+| | | | | | | | | | | +- ID_MATCH: ___check_obj_id(L['self']._modules['in_layers']._modules['0'].training, 8908032)
+| | | +- GuardManager: source=L['self']._parameters, accessed_by=DictGetItemGuardAccessor('_parameters')
+| | | | +- DICT_LENGTH: not L['self']._parameters                                   
+| +- GuardManager: source=G, accessed_by=GlobalsGuardAccessor
+| | +- GuardManager: source=G['F'], accessed_by=DictGetItemGuardAccessor('F')
+| | | +- ID_MATCH: ___check_obj_id(G['F'], 139720064954224)                    
+| | | +- OBJECT_ALIASING: G['F'] is G['__import_torch_dot_nn_dot_modules_dot_dropout'].F
+| | | +- GuardManager: source=G['F'].gelu, accessed_by=GetAttrGuardAccessor(gelu)
+| | | | +- ID_MATCH: ___check_obj_id(G['F'].gelu, 139721962700240)               
+| | | +- GuardManager: source=G['F'].dropout, accessed_by=GetAttrGuardAccessor(dropout)
+| | | | +- ID_MATCH: ___check_obj_id(G['F'].dropout, 139720032587424)            
+| | +- GuardManager: source=G['torch'], accessed_by=DictGetItemGuardAccessor('torch')
+| | | +- ID_MATCH: ___check_obj_id(G['torch'], 139724697307792)                
+| | | +- GuardManager: source=G['torch'].ops, accessed_by=GetAttrGuardAccessor(ops)
+| | | | +- ID_MATCH: ___check_obj_id(G['torch'].ops, 139720033503648)            
+| | | | +- GuardManager: source=G['torch'].ops.test, accessed_by=GetAttrGuardAccessor(test)
+| | | | | +- ID_MATCH: ___check_obj_id(G['torch'].ops.test, 139719717837520)       
+| | | | | +- GuardManager: source=G['torch'].ops.test.baz, accessed_by=GetAttrGuardAccessor(baz)
+| | | | | | +- ID_MATCH: ___check_obj_id(G['torch'].ops.test.baz, 139710547383760)   
+| | +- GuardManager: source=G['__builtins_dict___0'], accessed_by=DictGetItemGuardAccessor('__builtins_dict___0')
+| | | +- GuardManager: source=G['__builtins_dict___0']['iter'], accessed_by=DictGetItemGuardAccessor('iter')
+| | | | +- ID_MATCH: ___check_obj_id(G['__builtins_dict___0']['iter'], 139724706059008)
+| | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_module'], accessed_by=DictGetItemGuardAccessor('__import_torch_dot_nn_dot_modules_dot_module')
+| | | +- ID_MATCH: ___check_obj_id(G['__import_torch_dot_nn_dot_modules_dot_module'], 139721387922336)
+| | | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_module']._global_forward_hooks, accessed_by=GetAttrGuardAccessor(_global_forward_hooks)
+| | | | +- DICT_LENGTH: not G['__import_torch_dot_nn_dot_modules_dot_module']._global_forward_hooks
+| | | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_module']._global_backward_hooks, accessed_by=GetAttrGuardAccessor(_global_backward_hooks)
+| | | | +- DICT_LENGTH: not G['__import_torch_dot_nn_dot_modules_dot_module']._global_backward_hooks
+| | | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_module']._global_forward_pre_hooks, accessed_by=GetAttrGuardAccessor(_global_forward_pre_hooks)
+| | | | +- DICT_LENGTH: not G['__import_torch_dot_nn_dot_modules_dot_module']._global_forward_pre_hooks
+| | | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_module']._global_backward_pre_hooks, accessed_by=GetAttrGuardAccessor(_global_backward_pre_hooks)
+| | | | +- DICT_LENGTH: not G['__import_torch_dot_nn_dot_modules_dot_module']._global_backward_pre_hooks
+| | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_dropout'], accessed_by=DictGetItemGuardAccessor('__import_torch_dot_nn_dot_modules_dot_dropout')
+| | | +- ID_MATCH: ___check_obj_id(G['__import_torch_dot_nn_dot_modules_dot_dropout'], 139720031577856)
+| | | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_dropout'].F, accessed_by=GetAttrGuardAccessor(F)
+| | | | +- OBJECT_ALIASING: G['F'] is G['__import_torch_dot_nn_dot_modules_dot_dropout'].F
+| | +- GuardManager: source=G['__import_torch_dot_nn_dot_modules_dot_container'], accessed_by=DictGetItemGuardAccessor('__import_torch_dot_nn_dot_modules_dot_container')
+| | | +- ID_MATCH: ___check_obj_id(G['__import_torch_dot_nn_dot_modules_dot_container'], 139720031411696)
