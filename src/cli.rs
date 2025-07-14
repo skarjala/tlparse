@@ -91,7 +91,6 @@ fn main() -> anyhow::Result<()> {
     }
     fs::create_dir(&out_path)?;
 
-    // Parse log file and write output
     let config = ParseConfig {
         strict: cli.strict,
         strict_compile_id: cli.strict_compile_id,
@@ -139,32 +138,6 @@ fn parse_and_write_output(
     log_path: &PathBuf,
     output_dir: &PathBuf,
 ) -> anyhow::Result<PathBuf> {
-    let config = ParseConfig {
-        strict: cli.strict,
-        strict_compile_id: cli.strict_compile_id,
-        custom_parsers: Vec::new(),
-        custom_header_html: cli.custom_header_html.clone(),
-        verbose: cli.verbose,
-        plain_text: cli.plain_text,
-        export: cli.export,
-        inductor_provenance: cli.inductor_provenance,
-    };
-    let per_rank_config = config;
-    let main_output_file = parse_and_write_output(per_rank_config, &path, &out_path);
-
-    if !cli.no_browser {
-        opener::open(main_output_file.unwrap())?;
-    }
-    Ok(())
-}
-
-// Helper function to parse a log file and write output to a directory
-// Returns the relative path to the main output file within the output directory
-fn parse_and_write_output(
-    config: ParseConfig,
-    log_path: &PathBuf,
-    output_dir: &PathBuf,
-) -> anyhow::Result<PathBuf> {
     let output = parse_path(log_path, config)?;
 
     for (filename, content) in output {
@@ -207,12 +180,17 @@ fn handle_one_rank(
     let main_output_file = parse_and_write_output(cfg, &log_path, &out_dir)?;
 
     if open_browser {
-        opener::open(out_dir.join(main_output_file))?;
+        opener::open(&main_output_file)?;
     }
     Ok(())
 }
 
-fn handle_all_ranks(path: PathBuf, out_path: PathBuf, overwrite: bool, cfg: &ParseConfig) -> anyhow::Result<()> {
+fn handle_all_ranks(
+    path: PathBuf,
+    out_path: PathBuf,
+    overwrite: bool,
+    cfg: &ParseConfig,
+) -> anyhow::Result<()> {
     let input_dir = path;
     if !input_dir.is_dir() {
         bail!(
@@ -253,7 +231,7 @@ fn handle_all_ranks(path: PathBuf, out_path: PathBuf, overwrite: bool, cfg: &Par
         let subdir = out_path.join(format!("rank_{rank_num}"));
         println!("Processing rank {rank_num} → {}", subdir.display());
 
-        handle_one_rank(cfg, log_path, false, subdir, false, false)?;
+        handle_one_rank(cfg, log_path, false, subdir, false, overwrite)?;
     }
 
     println!(
