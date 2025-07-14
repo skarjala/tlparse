@@ -671,8 +671,9 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
         let default_parsers = default_parsers(&tt, config);
         let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
         all_parsers.extend(config.custom_parsers.iter());
+        let mut parser_payload_filename = ParserResult::NoPayload;
         for parser in all_parsers {
-            run_parser(
+            let result = run_parser(
                 lineno,
                 parser,
                 &e,
