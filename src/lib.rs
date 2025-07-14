@@ -22,6 +22,9 @@ pub mod parsers;
 mod templates;
 mod types;
 
+pub use crate::templates::{CSS, TEMPLATE_MULTI_RANK_INDEX, TEMPLATE_QUERY_PARAM_SCRIPT};
+pub use crate::types::MultiRankContext;
+
 #[derive(Debug)]
 enum ParserResult {
     NoPayload,
