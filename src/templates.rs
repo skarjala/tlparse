@@ -157,7 +157,7 @@ and avoid inlining the function in the first place.
 </p>
 <p>
 When compiled autograd is enabled, the compile id will include a prefix signifier <code>[!a/x/y]</code>,
-where a is the <strong>compiled autograd id</strong>. For instance, <code>[!0/-/-]</code> refers 
+where a is the <strong>compiled autograd id</strong>. For instance, <code>[!0/-/-]</code> refers
 to the first graph captured by compiled autograd. It is then traced by torch.compile as <code>[!0/x/y_z]</code>.
 </p>
 <p>
@@ -486,7 +486,7 @@ you may address them.
 <table>
 <tr> <th> Failure Type </th> <th> Reason </th> <th> Additional Info </th> </tr>
 {{ for failure in failures }}
-<tr> 
+<tr>
     <td>{failure.failure_type | format_unescaped}</td>
     <td>{failure.reason | format_unescaped}</td>
     <td>{failure.additional_info | format_unescaped}</td>
@@ -529,3 +529,33 @@ pub static TEMPLATE_SYMBOLIC_GUARD_INFO: &str = r#"
 pub static PROVENANCE_CSS: &str = include_str!("provenance.css");
 pub static PROVENANCE_JS: &str = include_str!("provenance.js");
 pub static TEMPLATE_PROVENANCE_TRACKING: &str = include_str!("provenance.html");
+
+pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
+<html>
+<head>
+  <meta charset="UTF-8">
+</head>
+<style>
+{css | format_unescaped}
+</style>
+<body>
+<div>
+{custom_header_html | format_unescaped}
+<h2>Multi-Rank TLParse Report</h2>
+<p>
+This report contains TLParse links from <strong>{num_ranks}</strong> rank(s). Click on any rank below
+to view its detailed compilation report.
+</p>
+<p>
+Individual rank reports:
+</p>
+<ul>
+{{ for rank in ranks }}
+    <li><a href="rank_{rank}/index.html">Rank {rank}</a></li>
+{{ endfor }}
+</ul>
+</div>
+{qps | format_unescaped}
+</body>
+</html>
+"#;

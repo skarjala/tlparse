@@ -4,7 +4,9 @@ use anyhow::{bail, Context};
 use std::fs;
 use std::path::PathBuf;
 
+use tlparse::MultiRankContext;
 use tlparse::{parse_path, ParseConfig};
+use tlparse::{CSS, TEMPLATE_MULTI_RANK_INDEX, TEMPLATE_QUERY_PARAM_SCRIPT};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -225,6 +227,13 @@ fn handle_all_ranks(
         );
     }
 
+    let mut sorted_ranks: Vec<String> = rank_logs.iter().map(|(_, rank)| rank.clone()).collect();
+    sorted_ranks.sort_by(|a, b| {
+        a.parse::<u32>()
+            .unwrap_or(0)
+            .cmp(&b.parse::<u32>().unwrap_or(0))
+    });
+
     for (log_path, rank_num) in rank_logs {
         let subdir = out_path.join(format!("rank_{rank_num}"));
         println!("Processing rank {rank_num} → {}", subdir.display());
@@ -236,6 +245,31 @@ fn handle_all_ranks(
         "Multi-rank report generated under {}\nIndividual pages: rank_*/index.html",
         out_path.display()
     );
-    // TODO: generate and open a landing page
+
+    // Generate landing page HTML using template system
+    use tinytemplate::TinyTemplate;
+    let mut tt = TinyTemplate::new();
+    tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
+    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
+    let context = MultiRankContext {
+        css: CSS,
+        custom_header_html: &cfg.custom_header_html.clone(),
+        num_ranks: sorted_ranks.len(),
+        ranks: sorted_ranks,
+        qps: TEMPLATE_QUERY_PARAM_SCRIPT,
+    };
+
+    let landing_html = tt.render("multi_rank_index.html", &context)?;
+    let landing_page_path = out_path.join("index.html");
+    fs::write(&landing_page_path, landing_html)?;
+
+    println!(
+        "Multi-rank report generated under {}\nLanding page: index.html",
+        out_path.display()
+    );
+
+    // Open the landing page
+    opener::open(&landing_page_path)?;
+
     Ok(())
 }
