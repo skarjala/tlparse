@@ -6,9 +6,6 @@ use std::path::PathBuf;
 
 use tlparse::{parse_path, ParseConfig};
 
-// Main output filename used by both single rank and multi-rank processing
-const MAIN_OUTPUT_FILENAME: &str = "index.html";
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -54,7 +51,6 @@ pub struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
     let path = if cli.latest {
         let input_path = cli.path;
         // Path should be a directory
@@ -80,6 +76,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let out_path = cli.out;
+
     if out_path.exists() {
         if !cli.overwrite {
             bail!(
@@ -103,10 +100,10 @@ fn main() -> anyhow::Result<()> {
         inductor_provenance: cli.inductor_provenance,
     };
     let per_rank_config = config;
-    parse_and_write_output(per_rank_config, &path, &out_path)?;
+    let main_output_file = parse_and_write_output(per_rank_config, &path, &out_path);
 
     if !cli.no_browser {
-        opener::open(out_path.join(MAIN_OUTPUT_FILENAME))?;
+        opener::open(main_output_file.unwrap())?;
     }
     Ok(())
 }
