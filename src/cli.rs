@@ -78,24 +78,20 @@ fn main() -> anyhow::Result<()> {
         cli.path
     };
 
-    let out_path = cli.out;
-
-    if out_path.exists() {
-        if !cli.overwrite {
-            bail!(
-                "Directory {} already exists, use -o OUTDIR to write to another location or pass --overwrite to overwrite the old contents",
-                out_path.display()
-            );
+    if cli.all_ranks_html {
+        if cli.latest {
+            bail!("--latest cannot be used with --all-ranks-html");
         }
-        fs::remove_dir_all(&out_path)?;
+        if cli.no_browser {
+            bail!("--no-browser cannot be used with --all-ranks-html");
+        }
     }
-    fs::create_dir(&out_path)?;
 
     let config = ParseConfig {
         strict: cli.strict,
         strict_compile_id: cli.strict_compile_id,
         custom_parsers: Vec::new(),
-        custom_header_html: cli.custom_header_html.clone(),
+        custom_header_html: cli.custom_header_html,
         verbose: cli.verbose,
         plain_text: cli.plain_text,
         export: cli.export,
@@ -103,13 +99,13 @@ fn main() -> anyhow::Result<()> {
     };
 
     if cli.all_ranks_html {
-        handle_all_ranks(path, out_path, cli.overwrite, &config)?;
+        handle_all_ranks(&config, path, cli.out, cli.overwrite)?;
     } else {
         handle_one_rank(
             &config,
             path,
             cli.latest,
-            out_path,
+            cli.out,
             !cli.no_browser,
             cli.overwrite,
         )?;
@@ -186,10 +182,10 @@ fn handle_one_rank(
 }
 
 fn handle_all_ranks(
+    cfg: &ParseConfig,
     path: PathBuf,
     out_path: PathBuf,
     overwrite: bool,
-    cfg: &ParseConfig,
 ) -> anyhow::Result<()> {
     let input_dir = path;
     if !input_dir.is_dir() {
@@ -210,13 +206,14 @@ fn handle_all_ranks(
                 return None;
             }
             let filename = path.file_name()?.to_str()?;
-            let after_prefix = filename.strip_prefix("dedicated_log_torch_trace_rank_")?;
-            let without_log = after_prefix.strip_suffix(".log")?;
-            let rank_part = without_log.split('_').next()?;
-            rank_part
-                .chars()
-                .all(|c| c.is_ascii_digit())
-                .then(|| (path.clone(), rank_part.to_owned()))
+            filename
+                .strip_prefix("dedicated_log_torch_trace_rank_")?
+                .strip_suffix(".log")?
+                .split('_')
+                .next()?
+                .parse::<u32>()
+                .ok()
+                .map(|rank_num| (path.clone(), rank_num))
         })
         .collect();
 
