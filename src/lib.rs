@@ -450,6 +450,10 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
     let mut chromium_events: Vec<serde_json::Value> = Vec::new();
     all_parsers.extend(config.custom_parsers.iter());
 
+    let default_parsers = default_parsers(&tt, config);
+    let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
+    all_parsers.extend(config.custom_parsers.iter());
+
     while let Some((lineno, line)) = iter.next() {
         bytes_read += line.len() as u64;
         pb.set_position(bytes_read);
@@ -668,11 +672,8 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
         // TODO: output should be able to generate this without explicitly creating
         let compile_directory = directory.entry(compile_id_entry).or_default();
 
-        let default_parsers = default_parsers(&tt, config);
-        let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
-        all_parsers.extend(config.custom_parsers.iter());
         let mut parser_payload_filename = ParserResult::NoPayload;
-        for parser in all_parsers {
+        for parser in &all_parsers {
             let result = run_parser(
                 lineno,
                 parser,

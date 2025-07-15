@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
         strict: cli.strict,
         strict_compile_id: cli.strict_compile_id,
         custom_parsers: Vec::new(),
-        custom_header_html: cli.custom_header_html.clone(),
+        custom_header_html: cli.custom_header_html,
         verbose: cli.verbose,
         plain_text: cli.plain_text,
         export: cli.export,
