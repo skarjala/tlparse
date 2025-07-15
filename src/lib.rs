@@ -442,10 +442,9 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
         })
         .peekable();
 
-    let mut chromium_events: Vec<serde_json::Value> = Vec::new();
-
     let default_parsers = default_parsers(&tt, config);
     let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
+    let mut chromium_events: Vec<serde_json::Value> = Vec::new();
     all_parsers.extend(config.custom_parsers.iter());
 
     while let Some((lineno, line)) = iter.next() {
