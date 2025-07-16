@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::path::PathBuf;
 use tlparse;
 
 fn prefix_exists(map: &HashMap<PathBuf, String>, prefix: &str) -> bool {
@@ -418,4 +417,151 @@ fn test_provenance_tracking() {
             prefix
         );
     }
+}
+
+use std::fs::{self, create_dir_all, remove_dir_all};
+use std::path::PathBuf;
+use std::process::Command;
+
+#[test]
+fn test_all_ranks_basic() {
+    let pid = std::process::id();
+    let input_dir = PathBuf::from(format!("test_input_basic_{pid}"));
+    create_dir_all(&input_dir).unwrap();
+    let out_dir = PathBuf::from(format!("test_out_basic_{pid}"));
+
+    let log_content = fs::read_to_string("tests/inputs/simple.log").unwrap();
+    fs::write(
+        input_dir.join("dedicated_log_torch_trace_rank_0.log"),
+        &log_content,
+    )
+    .unwrap();
+    fs::write(
+        input_dir.join("dedicated_log_torch_trace_rank_1.log"),
+        &log_content,
+    )
+    .unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tlparse"))
+        .arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser")
+        .output()
+        .expect("failed to run tlparse");
+
+    assert!(
+        output.status.success(),
+        "tlparse command failed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rank0_index = out_dir.join("rank_0/index.html");
+    let rank1_index = out_dir.join("rank_1/index.html");
+    let landing_page = out_dir.join("index.html");
+
+    assert!(rank0_index.exists(), "rank 0 index.html should exist");
+    assert!(rank1_index.exists(), "rank 1 index.html should exist");
+    assert!(landing_page.exists(), "toplevel index.html should exist");
+
+    let landing_content = fs::read_to_string(landing_page).unwrap();
+    assert!(
+        landing_content.contains(r#"<a href="rank_0/index.html">"#),
+        "Landing page should contain a link to rank 0"
+    );
+    assert!(
+        landing_content.contains(r#"<a href="rank_1/index.html">"#),
+        "Landing page should contain a link to rank 1"
+    );
+
+    remove_dir_all(&input_dir).unwrap();
+    remove_dir_all(&out_dir).unwrap();
+}
+
+#[test]
+fn test_all_ranks_no_logs() {
+    let pid = std::process::id();
+    let input_dir = PathBuf::from(format!("test_input_nologs_{pid}"));
+    create_dir_all(&input_dir).unwrap();
+    let out_dir = PathBuf::from(format!("test_out_nologs_{pid}"));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tlparse"))
+        .arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser")
+        .output()
+        .expect("failed to run tlparse");
+
+    assert!(!output.status.success(), "tlparse should fail on empty dir");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("No rank log files found"),
+        "stderr should complain about missing log files"
+    );
+
+    remove_dir_all(&input_dir).unwrap();
+    let _ = remove_dir_all(&out_dir);
+}
+
+#[test]
+fn test_all_ranks_overwrite() {
+    let pid = std::process::id();
+    let input_dir = PathBuf::from(format!("test_input_overwrite_{pid}"));
+    create_dir_all(&input_dir).unwrap();
+    let out_dir = PathBuf::from(format!("test_out_overwrite_{pid}"));
+    create_dir_all(&out_dir).unwrap();
+
+    let log_content = fs::read_to_string("tests/inputs/simple.log").unwrap();
+    fs::write(
+        input_dir.join("dedicated_log_torch_trace_rank_0.log"),
+        &log_content,
+    )
+    .unwrap();
+
+    // Run without --overwrite, should fail
+    let output_fail = Command::new(env!("CARGO_BIN_EXE_tlparse"))
+        .arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser")
+        .output()
+        .expect("failed to run tlparse");
+
+    assert!(
+        !output_fail.status.success(),
+        "tlparse should fail without --overwrite on existing dir"
+    );
+    let stderr = String::from_utf8_lossy(&output_fail.stderr);
+    assert!(
+        stderr.contains("already exists"),
+        "stderr should complain about existing directory"
+    );
+
+    // Run with --overwrite, should succeed
+    let output_success = Command::new(env!("CARGO_BIN_EXE_tlparse"))
+        .arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser")
+        .output()
+        .expect("failed to run tlparse");
+
+    assert!(
+        output_success.status.success(),
+        "tlparse should succeed with --overwrite. stderr: {}",
+        String::from_utf8_lossy(&output_success.stderr)
+    );
+    assert!(out_dir.join("rank_0/index.html").exists());
+    assert!(out_dir.join("index.html").exists());
+
+    remove_dir_all(&input_dir).unwrap();
+    remove_dir_all(&out_dir).unwrap();
 }

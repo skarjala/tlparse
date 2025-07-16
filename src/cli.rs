@@ -82,9 +82,6 @@ fn main() -> anyhow::Result<()> {
         if cli.latest {
             bail!("--latest cannot be used with --all-ranks-html");
         }
-        if cli.no_browser {
-            bail!("--no-browser not yet implemented with --all-ranks-html");
-        }
     }
 
     let config = ParseConfig {
