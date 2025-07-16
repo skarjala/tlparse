@@ -1,0 +1,188 @@
+<pre style="background-color:#ffffff;">
+<span style="font-style:italic;color:#969896;"># AOT ID: [&#39;0_inference&#39;]
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">ctypes </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">c_void_p, c_long, c_int
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">torch
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">math
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">random
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">os
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">tempfile
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">math </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">inf, nan
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.hooks </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">run_intermediate_hooks
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.utils </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">maybe_profile
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.codegen.memory_planning </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">_align </span><span style="font-weight:bold;color:#a71d5d;">as </span><span style="color:#323232;">align
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">device, empty_strided
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.async_compile </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">AsyncCompile
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.select_algorithm </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">extern_kernels
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.codegen.multi_kernel </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">MultiKernelCall
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">triton
+</span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">triton.language </span><span style="font-weight:bold;color:#a71d5d;">as </span><span style="color:#323232;">tl
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.runtime.triton_heuristics </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">(
+</span><span style="color:#323232;">    grid,
+</span><span style="color:#323232;">    split_scan_grid,
+</span><span style="color:#323232;">    grid_combo_kernels,
+</span><span style="color:#323232;">    start_graph,
+</span><span style="color:#323232;">    end_graph,
+</span><span style="color:#323232;">    cooperative_reduction_grid,
+</span><span style="color:#323232;">)
+</span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._C </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">_cuda_getCurrentRawStream </span><span style="font-weight:bold;color:#a71d5d;">as </span><span style="color:#323232;">get_raw_stream
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">aten </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.ops.aten
+</span><span style="color:#323232;">inductor_ops </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.ops.inductor
+</span><span style="color:#323232;">_quantized </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.ops._quantized
+</span><span style="color:#323232;">assert_size_stride </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._dynamo.guards.assert_size_stride
+</span><span style="color:#323232;">empty_strided_cpu </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._dynamo.guards._empty_strided_cpu
+</span><span style="color:#323232;">empty_strided_cuda </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._dynamo.guards._empty_strided_cuda
+</span><span style="color:#323232;">empty_strided_xpu </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._dynamo.guards._empty_strided_xpu
+</span><span style="color:#323232;">reinterpret_tensor </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._dynamo.guards._reinterpret_tensor
+</span><span style="color:#323232;">alloc_from_pool </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.ops.inductor._alloc_from_pool
+</span><span style="color:#323232;">async_compile </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">AsyncCompile()
+</span><span style="color:#323232;">empty_strided_p2p </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.</span><span style="color:#0086b3;">_C</span><span style="color:#323232;">._distributed_c10d._SymmetricMemory.empty_strided_p2p
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">
+</span><span style="font-style:italic;color:#969896;"># kernel path: /tmp/tmprds_hch0/ke/ckedh2vjam5uo7wobyr5yq2et3clblzbzgykujgmjbmkj5uyimpl.py
+</span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [input_1], Original ATen: [aten.native_dropout]
+</span><span style="font-style:italic;color:#969896;"># Source node to ATen node mapping:
+</span><span style="font-style:italic;color:#969896;">#   input_1 =&gt; inductor_lookup_seed_default, inductor_random_default
+</span><span style="font-style:italic;color:#969896;"># Graph fragment:
+</span><span style="font-style:italic;color:#969896;">#   %inductor_lookup_seed_default : [num_users=1] = call_function[target=torch.ops.prims.inductor_lookup_seed.default](args = (%inductor_seeds_default, 0), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %inductor_random_default : [num_users=1] = call_function[target=torch.ops.prims.inductor_random.default](args = ([1, 320, 128, 128], %inductor_lookup_seed_default, rand), kwargs = {})
+</span><span style="color:#323232;">triton_poi_fused_native_dropout_0 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">async_compile.triton(</span><span style="color:#183691;">&#39;triton_poi_fused_native_dropout_0&#39;</span><span style="color:#323232;">, </span><span style="color:#183691;">&#39;&#39;&#39;
+</span><span style="color:#183691;">import triton
+</span><span style="color:#183691;">import triton.language as tl
+</span><span style="color:#183691;">from triton.compiler.compiler import AttrsDescriptor
+</span><span style="color:#183691;">
+</span><span style="color:#183691;">from torch._inductor.runtime import triton_helpers, triton_heuristics
+</span><span style="color:#183691;">from torch._inductor.runtime.triton_helpers import libdevice, math as tl_math
+</span><span style="color:#183691;">from torch._inductor.runtime.hints import AutotuneHint, ReductionHint, TileHint, DeviceProperties
+</span><span style="color:#183691;">triton_helpers.set_driver_to_gpu()
+</span><span style="color:#183691;">
+</span><span style="color:#183691;">@triton_heuristics.pointwise(
+</span><span style="color:#183691;">    size_hints=[8388608], 
+</span><span style="color:#183691;">    filename=__file__,
+</span><span style="color:#183691;">    triton_meta={&#39;signature&#39;: {&#39;in_ptr0&#39;: &#39;*i64&#39;, &#39;out_ptr0&#39;: &#39;*fp32&#39;, &#39;load_seed_offset&#39;: &#39;i32&#39;, &#39;xnumel&#39;: &#39;i32&#39;}, &#39;device&#39;: DeviceProperties(type=&#39;cuda&#39;, index=0, cc=90, major=9, regs_per_multiprocessor=65536, max_threads_per_multi_processor=2048, multi_processor_count=132, warp_size=32), &#39;constants&#39;: </span><span style="color:#0086b3;">{}</span><span style="color:#183691;">, &#39;configs&#39;: [AttrsDescriptor(divisible_by_16=(0, 1, 3), equal_to_1=())]},
+</span><span style="color:#183691;">    inductor_meta={&#39;autotune_hints&#39;: set(), &#39;kernel_name&#39;: &#39;triton_poi_fused_native_dropout_0&#39;, &#39;mutated_arg_names&#39;: [], &#39;optimize_mem&#39;: True, &#39;no_x_dim&#39;: False, &#39;num_load&#39;: 0, &#39;num_reduction&#39;: 0, &#39;backend_hash&#39;: &#39;562E840D41CEB1D8E51DE726EA7592B0C37A0C6FBD72CF4E958863CEC11D41A7&#39;, &#39;are_deterministic_algorithms_enabled&#39;: False, &#39;assert_indirect_indexing&#39;: True, &#39;autotune_local_cache&#39;: True, &#39;autotune_pointwise&#39;: False, &#39;autotune_remote_cache&#39;: None, &#39;force_disable_caches&#39;: False, &#39;dynamic_scale_rblock&#39;: True, &#39;max_autotune&#39;: False, &#39;max_autotune_pointwise&#39;: False, &#39;min_split_scan_rblock&#39;: 256, &#39;spill_threshold&#39;: 16, &#39;store_cubin&#39;: False},
+</span><span style="color:#183691;">    min_elem_per_thread=0
+</span><span style="color:#183691;">)
+</span><span style="color:#183691;">@triton.jit
+</span><span style="color:#183691;">def triton_poi_fused_native_dropout_0(in_ptr0, out_ptr0, load_seed_offset, xnumel, XBLOCK : tl.constexpr):
+</span><span style="color:#183691;">    xnumel = 5242880
+</span><span style="color:#183691;">    xoffset = tl.program_id(0) * XBLOCK
+</span><span style="color:#183691;">    xindex = xoffset + tl.arange(0, XBLOCK)[:]
+</span><span style="color:#183691;">    xmask = tl.full([XBLOCK], True, tl.int1)
+</span><span style="color:#183691;">    x0 = xindex
+</span><span style="color:#183691;">    tmp0 = tl.load(in_ptr0 + load_seed_offset)
+</span><span style="color:#183691;">    tmp1 = x0
+</span><span style="color:#183691;">    tmp2 = tl.rand(tmp0, (tmp1).to(tl.uint32))
+</span><span style="color:#183691;">    tl.store(out_ptr0 + (x0), tmp2, None)
+</span><span style="color:#183691;">&#39;&#39;&#39;</span><span style="color:#323232;">, device_str</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#183691;">&#39;cuda&#39;</span><span style="color:#323232;">)
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">
+</span><span style="font-style:italic;color:#969896;"># kernel path: /tmp/tmprds_hch0/eu/ceutejflq32k5wvvsucbkscrxmvjorlj2t3eq7tgcfyqrz5mhnh3.py
+</span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [input_1, out, out_1], Original ATen: [aten.native_dropout, aten.gelu, test.baz]
+</span><span style="font-style:italic;color:#969896;"># Source node to ATen node mapping:
+</span><span style="font-style:italic;color:#969896;">#   input_1 =&gt; clone, gt, mul_3, mul_4
+</span><span style="font-style:italic;color:#969896;">#   out =&gt; add, erf, mul, mul_1, mul_2
+</span><span style="font-style:italic;color:#969896;">#   out_1 =&gt; baz
+</span><span style="font-style:italic;color:#969896;"># Graph fragment:
+</span><span style="font-style:italic;color:#969896;">#   %clone : [num_users=1] = call_function[target=torch.ops.aten.clone.default](args = (%inductor_random_default,), kwargs = {memory_format: torch.channels_last})
+</span><span style="font-style:italic;color:#969896;">#   %gt : [num_users=1] = call_function[target=torch.ops.aten.gt.Scalar](args = (%clone, 0.1), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %mul : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%arg0_1, 0.5), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %mul_1 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%arg0_1, 0.7071067811865476), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %erf : [num_users=1] = call_function[target=torch.ops.aten.erf.default](args = (%mul_1,), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%erf, 1), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %mul_2 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%mul, %add), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %mul_3 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%gt, %mul_2), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %mul_4 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%mul_3, 1.1111111111111112), kwargs = {})
+</span><span style="font-style:italic;color:#969896;">#   %baz : [num_users=1] = call_function[target=torch.ops.test.baz.default](args = (%mul_4,), kwargs = {})
+</span><span style="color:#323232;">triton_poi_fused_baz_gelu_native_dropout_1 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">async_compile.triton(</span><span style="color:#183691;">&#39;triton_poi_fused_baz_gelu_native_dropout_1&#39;</span><span style="color:#323232;">, </span><span style="color:#183691;">&#39;&#39;&#39;
+</span><span style="color:#183691;">import triton
+</span><span style="color:#183691;">import triton.language as tl
+</span><span style="color:#183691;">from triton.compiler.compiler import AttrsDescriptor
+</span><span style="color:#183691;">
+</span><span style="color:#183691;">from torch._inductor.runtime import triton_helpers, triton_heuristics
+</span><span style="color:#183691;">from torch._inductor.runtime.triton_helpers import libdevice, math as tl_math
+</span><span style="color:#183691;">from torch._inductor.runtime.hints import AutotuneHint, ReductionHint, TileHint, DeviceProperties
+</span><span style="color:#183691;">triton_helpers.set_driver_to_gpu()
+</span><span style="color:#183691;">
+</span><span style="color:#183691;">@triton_heuristics.pointwise(
+</span><span style="color:#183691;">    size_hints=[16384, 512], tile_hint=TileHint.DEFAULT,
+</span><span style="color:#183691;">    filename=__file__,
+</span><span style="color:#183691;">    triton_meta={&#39;signature&#39;: {&#39;in_ptr0&#39;: &#39;*fp32&#39;, &#39;in_ptr1&#39;: &#39;*fp32&#39;, &#39;out_ptr0&#39;: &#39;*fp32&#39;, &#39;ynumel&#39;: &#39;i32&#39;, &#39;xnumel&#39;: &#39;i32&#39;}, &#39;device&#39;: DeviceProperties(type=&#39;cuda&#39;, index=0, cc=90, major=9, regs_per_multiprocessor=65536, max_threads_per_multi_processor=2048, multi_processor_count=132, warp_size=32), &#39;constants&#39;: </span><span style="color:#0086b3;">{}</span><span style="color:#183691;">, &#39;configs&#39;: [AttrsDescriptor(divisible_by_16=(0, 1, 2, 3, 4), equal_to_1=())]},
+</span><span style="color:#183691;">    inductor_meta={&#39;autotune_hints&#39;: set(), &#39;kernel_name&#39;: &#39;triton_poi_fused_baz_gelu_native_dropout_1&#39;, &#39;mutated_arg_names&#39;: [], &#39;optimize_mem&#39;: True, &#39;no_x_dim&#39;: False, &#39;num_load&#39;: 2, &#39;num_reduction&#39;: 0, &#39;backend_hash&#39;: &#39;562E840D41CEB1D8E51DE726EA7592B0C37A0C6FBD72CF4E958863CEC11D41A7&#39;, &#39;are_deterministic_algorithms_enabled&#39;: False, &#39;assert_indirect_indexing&#39;: True, &#39;autotune_local_cache&#39;: True, &#39;autotune_pointwise&#39;: False, &#39;autotune_remote_cache&#39;: None, &#39;force_disable_caches&#39;: False, &#39;dynamic_scale_rblock&#39;: True, &#39;max_autotune&#39;: False, &#39;max_autotune_pointwise&#39;: False, &#39;min_split_scan_rblock&#39;: 256, &#39;spill_threshold&#39;: 16, &#39;store_cubin&#39;: False},
+</span><span style="color:#183691;">    min_elem_per_thread=0
+</span><span style="color:#183691;">)
+</span><span style="color:#183691;">@triton.jit
+</span><span style="color:#183691;">def triton_poi_fused_baz_gelu_native_dropout_1(in_ptr0, in_ptr1, out_ptr0, ynumel, xnumel, YBLOCK : tl.constexpr, XBLOCK : tl.constexpr):
+</span><span style="color:#183691;">    ynumel = 16384
+</span><span style="color:#183691;">    xnumel = 320
+</span><span style="color:#183691;">    yoffset = tl.program_id(1) * YBLOCK
+</span><span style="color:#183691;">    yindex = yoffset + tl.arange(0, YBLOCK)[None, :]
+</span><span style="color:#183691;">    ymask = tl.full([XBLOCK, YBLOCK], True, tl.int1)
+</span><span style="color:#183691;">    xoffset = tl.program_id(0) * XBLOCK
+</span><span style="color:#183691;">    xindex = xoffset + tl.arange(0, XBLOCK)[:, None]
+</span><span style="color:#183691;">    xmask = xindex &lt; xnumel
+</span><span style="color:#183691;">    x1 = xindex
+</span><span style="color:#183691;">    y0 = yindex
+</span><span style="color:#183691;">    tmp0 = tl.load(in_ptr0 + (y0 + 16384*x1), xmask, eviction_policy=&#39;evict_last&#39;)
+</span><span style="color:#183691;">    tmp4 = tl.load(in_ptr1 + (x1 + 320*y0), xmask, eviction_policy=&#39;evict_last&#39;)
+</span><span style="color:#183691;">    tmp1 = 0.1
+</span><span style="color:#183691;">    tmp2 = tmp0 &gt; tmp1
+</span><span style="color:#183691;">    tmp3 = tmp2.to(tl.float32)
+</span><span style="color:#183691;">    tmp5 = 0.5
+</span><span style="color:#183691;">    tmp6 = tmp4 * tmp5
+</span><span style="color:#183691;">    tmp7 = 0.7071067811865476
+</span><span style="color:#183691;">    tmp8 = tmp4 * tmp7
+</span><span style="color:#183691;">    tmp9 = libdevice.erf(tmp8)
+</span><span style="color:#183691;">    tmp10 = 1.0
+</span><span style="color:#183691;">    tmp11 = tmp9 + tmp10
+</span><span style="color:#183691;">    tmp12 = tmp6 * tmp11
+</span><span style="color:#183691;">    tmp13 = tmp3 * tmp12
+</span><span style="color:#183691;">    tmp14 = 1.1111111111111112
+</span><span style="color:#183691;">    tmp15 = tmp13 * tmp14
+</span><span style="color:#183691;">    tl.store(out_ptr0 + (x1 + 320*y0), tmp15, xmask)
+</span><span style="color:#183691;">&#39;&#39;&#39;</span><span style="color:#323232;">, device_str</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#183691;">&#39;cuda&#39;</span><span style="color:#323232;">)
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">async_compile.wait(</span><span style="color:#62a35c;">globals</span><span style="color:#323232;">())
+</span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">async_compile
+</span><span style="color:#323232;">
+</span><span style="font-weight:bold;color:#a71d5d;">def </span><span style="font-weight:bold;color:#323232;">call</span><span style="color:#323232;">(args):
+</span><span style="color:#323232;">    arg0_1, </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">args
+</span><span style="color:#323232;">    args.clear()
+</span><span style="color:#323232;">    assert_size_stride(arg0_1, (</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">), (</span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">, </span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">40960</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">))
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">with </span><span style="color:#323232;">torch.cuda._DeviceGuard(</span><span style="color:#0086b3;">0</span><span style="color:#323232;">):
+</span><span style="color:#323232;">        torch.cuda.set_device(</span><span style="color:#0086b3;">0</span><span style="color:#323232;">)
+</span><span style="color:#323232;">        buf0 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">empty_strided_cuda((</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, ), (</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, ), torch.int64)
+</span><span style="color:#323232;">        </span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [], Original ATen: []
+</span><span style="color:#323232;">        aten.randint.low_out(</span><span style="font-weight:bold;color:#a71d5d;">-</span><span style="color:#0086b3;">9223372036854775808</span><span style="color:#323232;">, </span><span style="color:#0086b3;">9223372036854775807</span><span style="color:#323232;">, [</span><span style="color:#0086b3;">1</span><span style="color:#323232;">], out</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">buf0)
+</span><span style="color:#323232;">        buf1 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">empty_strided_cuda((</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">), (</span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">, </span><span style="color:#0086b3;">16384</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">, </span><span style="color:#0086b3;">1</span><span style="color:#323232;">), torch.float32)
+</span><span style="color:#323232;">        </span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [input_1], Original ATen: [aten.native_dropout]
+</span><span style="color:#323232;">        stream0 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">get_raw_stream(</span><span style="color:#0086b3;">0</span><span style="color:#323232;">)
+</span><span style="color:#323232;">        triton_poi_fused_native_dropout_0.run(buf0, buf1, </span><span style="color:#0086b3;">0</span><span style="color:#323232;">, </span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">, grid</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">grid(</span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">), stream</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">stream0)
+</span><span style="color:#323232;">        </span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">buf0
+</span><span style="color:#323232;">        buf2 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">empty_strided_cuda((</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">), (</span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">, </span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">40960</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">), torch.float32)
+</span><span style="color:#323232;">        </span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [input_1, out, out_1], Original ATen: [aten.native_dropout, aten.gelu, test.baz]
+</span><span style="color:#323232;">        triton_poi_fused_baz_gelu_native_dropout_1.run(buf1, arg0_1, buf2, </span><span style="color:#0086b3;">16384</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">, grid</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">grid(</span><span style="color:#0086b3;">16384</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">), stream</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">stream0)
+</span><span style="color:#323232;">        </span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">arg0_1
+</span><span style="color:#323232;">        </span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">buf1
+</span><span style="color:#323232;">        </span><span style="font-style:italic;color:#969896;"># Topologically Sorted Source Nodes: [input_1, out, out_1], Original ATen: [aten.native_dropout, aten.gelu, test.baz]
+</span><span style="color:#323232;">        buf3 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">torch.ops.test.baz.default(buf2)
+</span><span style="color:#323232;">        run_intermediate_hooks(</span><span style="color:#183691;">&#39;baz&#39;</span><span style="color:#323232;">, buf3)
+</span><span style="color:#323232;">        </span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">buf2
+</span><span style="color:#323232;">        buf4 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">buf3
+</span><span style="color:#323232;">        </span><span style="font-weight:bold;color:#a71d5d;">del </span><span style="color:#323232;">buf3
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">return </span><span style="color:#323232;">(buf4, )
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">
+</span><span style="font-weight:bold;color:#a71d5d;">def </span><span style="font-weight:bold;color:#323232;">benchmark_compiled_module</span><span style="color:#323232;">(times</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#0086b3;">10</span><span style="color:#323232;">, repeat</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#0086b3;">10</span><span style="color:#323232;">):
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._dynamo.testing </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">rand_strided
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.utils </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">print_performance
+</span><span style="color:#323232;">    arg0_1 </span><span style="font-weight:bold;color:#a71d5d;">= </span><span style="color:#323232;">rand_strided((</span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">, </span><span style="color:#0086b3;">128</span><span style="color:#323232;">), (</span><span style="color:#0086b3;">5242880</span><span style="color:#323232;">, </span><span style="color:#0086b3;">1</span><span style="color:#323232;">, </span><span style="color:#0086b3;">40960</span><span style="color:#323232;">, </span><span style="color:#0086b3;">320</span><span style="color:#323232;">), device</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#183691;">&#39;cuda:0&#39;</span><span style="color:#323232;">, dtype</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">torch.float32)
+</span><span style="color:#323232;">    fn </span><span style="font-weight:bold;color:#a71d5d;">= lambda</span><span style="color:#323232;">: call([arg0_1])
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">return </span><span style="color:#323232;">print_performance(fn, times</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">times, repeat</span><span style="font-weight:bold;color:#a71d5d;">=</span><span style="color:#323232;">repeat)
+</span><span style="color:#323232;">
+</span><span style="color:#323232;">
+</span><span style="font-weight:bold;color:#a71d5d;">if </span><span style="color:#323232;">__name__ </span><span style="font-weight:bold;color:#a71d5d;">== </span><span style="color:#183691;">&quot;__main__&quot;</span><span style="color:#323232;">:
+</span><span style="color:#323232;">    </span><span style="font-weight:bold;color:#a71d5d;">from </span><span style="color:#323232;">torch._inductor.wrapper_benchmark </span><span style="font-weight:bold;color:#a71d5d;">import </span><span style="color:#323232;">compiled_module_main
+</span><span style="color:#323232;">    compiled_module_main(</span><span style="color:#183691;">&#39;None&#39;</span><span style="color:#323232;">, benchmark_compiled_module)
+</span></pre>

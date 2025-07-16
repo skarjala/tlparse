@@ -1,0 +1,26 @@
+class <lambda>(torch.nn.Module):
+    def forward(self, arg0_1: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0"):
+        # No stacktrace found for following nodes
+        inductor_seeds_default: "i64[1][1]cuda:0" = torch.ops.prims.inductor_seeds.default(1, device(type='cuda', index=0))
+        inductor_lookup_seed_default: "i64[][]cuda:0" = torch.ops.prims.inductor_lookup_seed.default(inductor_seeds_default, 0);  inductor_seeds_default = None
+        inductor_random_default: "f32[1, 320, 128, 128][5242880, 16384, 128, 1]cuda:0" = torch.ops.prims.inductor_random.default([1, 320, 128, 128], inductor_lookup_seed_default, 'rand');  inductor_lookup_seed_default = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11120 in helper, code: out = self.in_layers(out)
+        clone: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.clone.default(inductor_random_default, memory_format = torch.channels_last);  inductor_random_default = None
+        gt: "b8[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.gt.Scalar(clone, 0.1);  clone = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11119 in helper, code: out = F.gelu(x)
+        mul: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.mul.Tensor(arg0_1, 0.5)
+        mul_1: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.mul.Tensor(arg0_1, 0.7071067811865476);  arg0_1 = None
+        erf: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.erf.default(mul_1);  mul_1 = None
+        add: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.add.Tensor(erf, 1);  erf = None
+        mul_2: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.mul.Tensor(mul, add);  mul = add = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11120 in helper, code: out = self.in_layers(out)
+        mul_3: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.mul.Tensor(gt, mul_2);  gt = mul_2 = None
+        mul_4: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.aten.mul.Tensor(mul_3, 1.1111111111111112);  mul_3 = None
+        
+         # File: /data/users/xmfan/a/pytorch/test/inductor/test_torchinductor.py:11125 in forward, code: out = torch.ops.test.baz(out)
+        baz: "f32[1, 320, 128, 128][5242880, 1, 40960, 320]cuda:0" = torch.ops.test.baz.default(mul_4);  mul_4 = None
+        return (baz,)
+        
