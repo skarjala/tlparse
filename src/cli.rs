@@ -85,9 +85,6 @@ fn main() -> anyhow::Result<()> {
         if cli.latest {
             bail!("--latest cannot be used with --all-ranks-html");
         }
-        if cli.no_browser {
-            bail!("--no-browser not yet implemented with --all-ranks-html");
-        }
     }
 
     let config = ParseConfig {
@@ -227,7 +224,7 @@ fn handle_all_ranks(
         );
     }
 
-    let mut sorted_ranks: Vec<String> = rank_logs.iter().map(|(_, rank)| rank.clone()).collect();
+    let mut sorted_ranks: Vec<String> = rank_logs.iter().map(|(_, rank)| rank.to_string()).collect();
     sorted_ranks.sort_by(|a, b| {
         a.parse::<u32>()
             .unwrap_or(0)
@@ -268,7 +265,6 @@ fn handle_all_ranks(
         out_path.display()
     );
 
-    // Open the landing page
     opener::open(&landing_page_path)?;
 
     Ok(())
