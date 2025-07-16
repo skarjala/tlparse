@@ -23,7 +23,6 @@ mod templates;
 mod types;
 
 pub use crate::templates::{CSS, TEMPLATE_MULTI_RANK_INDEX, TEMPLATE_QUERY_PARAM_SCRIPT};
-pub use crate::types::MultiRankContext;
 
 #[derive(Debug)]
 enum ParserResult {
@@ -445,16 +444,9 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
         })
         .peekable();
 
-<<<<<<< HEAD
     let default_parsers = default_parsers(&tt, config);
     let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
-=======
->>>>>>> 758a202 (Add --all-ranks-html CLI infrastructure and core processing logic)
     let mut chromium_events: Vec<serde_json::Value> = Vec::new();
-    all_parsers.extend(config.custom_parsers.iter());
-
-    let default_parsers = default_parsers(&tt, config);
-    let mut all_parsers: Vec<&Box<dyn StructuredLogParser>> = default_parsers.iter().collect();
     all_parsers.extend(config.custom_parsers.iter());
 
     while let Some((lineno, line)) = iter.next() {
@@ -1154,4 +1146,28 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
     }
 
     Ok(output)
+}
+
+pub fn generate_multi_rank_html(
+    out_path: &PathBuf,
+    sorted_ranks: Vec<String>,
+    cfg: &ParseConfig,
+) -> anyhow::Result<(PathBuf, String)> {
+    // Create the TinyTemplate instance for rendering the landing page.
+    let mut tt = TinyTemplate::new();
+    tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
+    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
+
+    let ctx = MultiRankContext {
+        css: CSS,
+        custom_header_html: &cfg.custom_header_html,
+        num_ranks: sorted_ranks.len(),
+        ranks: sorted_ranks,
+        qps: TEMPLATE_QUERY_PARAM_SCRIPT,
+    };
+
+    let html = tt.render("multi_rank_index.html", &ctx)?;
+    let landing_page_path = out_path.join("index.html");
+
+    Ok((landing_page_path, html))
 }
