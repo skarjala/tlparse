@@ -833,11 +833,12 @@ pub struct ProvenanceContext<'a> {
     pub node_mappings_content: String,
 }
 
-#[derive(serde::Serialize)]
-pub struct MultiRankContext<'a> {
-    pub css: &'a str,
-    pub custom_header_html: &'a str,
+#[derive(Serialize)]
+pub struct MultiRankContext {
+    pub css: &'static str,
+    pub custom_header_html: String,
     pub num_ranks: usize,
     pub ranks: Vec<String>,
-    pub qps: &'a str,
+    pub qps: &'static str,
+    pub has_chromium_events: bool,
 }
