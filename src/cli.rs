@@ -231,11 +231,11 @@ fn handle_all_ranks(
     for (log_path, rank_num) in rank_logs {
         let subdir = out_path.join(format!("rank_{rank_num}"));
         println!("Processing rank {rank_num} → {}", subdir.display());
-
-        handle_one_rank(cfg, log_path, false, subdir.clone(), false, overwrite)?;
-
-        // collect chromium events from each rank
         let chromium_events_path = subdir.join("chromium_events.json");
+
+        handle_one_rank(cfg, log_path, false, subdir, false, overwrite)?;
+
+        // collect chromium events for each rank
         if chromium_events_path.exists() {
             let file_content = fs::read_to_string(&chromium_events_path)?;
             if let Ok(mut events) = serde_json::from_str::<Vec<serde_json::Value>>(&file_content) {

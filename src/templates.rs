@@ -543,7 +543,7 @@ pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
 {custom_header_html | format_unescaped}
 <h2>Multi-Rank TLParse Report</h2>
 <p>
-This report contains TLParse links from {num_ranks} rank(s). Click on any rank below
+This report contains TLParse links from <strong>{num_ranks}</strong> rank(s). Click on any rank below
 to view its detailed compilation report.
 </p>
 {{ if has_chromium_events }}

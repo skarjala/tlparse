@@ -834,11 +834,11 @@ pub struct ProvenanceContext<'a> {
 }
 
 #[derive(Serialize)]
-pub struct MultiRankContext {
-    pub css: &'static str,
-    pub custom_header_html: String,
+pub struct MultiRankContext<'a> {
+    pub css: &'a str,
+    pub custom_header_html: &'a str,
     pub num_ranks: usize,
     pub ranks: Vec<String>,
-    pub qps: &'static str,
+    pub qps: &'a str,
     pub has_chromium_events: bool,
 }
