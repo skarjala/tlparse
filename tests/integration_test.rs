@@ -595,7 +595,7 @@ fn test_all_ranks_chromium_events_combined() -> Result<(), Box<dyn std::error::E
     assert_eq!(pids, expected_pids);
 
     // verify each rank-specific chromium_events.json file
-    for &rank in &[0u32, 1, 2] {
+    for rank in 0..=2 {
         let rank_events_path = out_dir.join(format!("rank_{}/chromium_events.json", rank));
         assert!(rank_events_path.exists());
         let rank_events_content = fs::read_to_string(&rank_events_path)?;
@@ -674,7 +674,7 @@ fn test_all_ranks_chromium_events_sparse() -> Result<(), Box<dyn std::error::Err
     assert_eq!(pids, expected_pids);
 
     // verify each rank-specific chromium_events.json file
-    for &rank in &[0u32, 1, 2] {
+    for rank in 0..=2 {
         let rank_events_path = out_dir.join(format!("rank_{}/chromium_events.json", rank));
         assert!(rank_events_path.exists());
         let rank_events_content = fs::read_to_string(&rank_events_path)?;
