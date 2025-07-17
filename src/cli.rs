@@ -226,12 +226,34 @@ fn handle_all_ranks(
     let mut rank_nums: Vec<u32> = rank_logs.iter().map(|(_, rank)| *rank).collect();
     rank_nums.sort_unstable();
     let sorted_ranks: Vec<String> = rank_nums.iter().map(|r| r.to_string()).collect();
+    let mut all_chromium_events: Vec<serde_json::Value> = Vec::new();
 
     for (log_path, rank_num) in rank_logs {
         let subdir = out_path.join(format!("rank_{rank_num}"));
         println!("Processing rank {rank_num} → {}", subdir.display());
 
-        handle_one_rank(cfg, log_path, false, subdir, false, overwrite)?;
+        handle_one_rank(cfg, log_path, false, subdir.clone(), false, overwrite)?;
+
+        // collect chromium events from each rank
+        let chromium_events_path = subdir.join("chromium_events.json");
+        if chromium_events_path.exists() {
+            let file_content = fs::read_to_string(&chromium_events_path)?;
+            if let Ok(mut events) = serde_json::from_str::<Vec<serde_json::Value>>(&file_content) {
+                for event in &mut events {
+                    if let Some(obj) = event.as_object_mut() {
+                        obj.insert("pid".to_string(), serde_json::json!(rank_num));
+                    }
+                }
+                all_chromium_events.extend(events);
+            }
+        }
+    }
+
+    // combine chromium events from all ranks
+    if !all_chromium_events.is_empty() {
+        let combined_chromium_path = out_path.join("chromium_events.json");
+        let combined_events_json = serde_json::to_string_pretty(&all_chromium_events)?;
+        fs::write(combined_chromium_path, combined_events_json)?;
     }
 
     println!(
@@ -239,7 +261,12 @@ fn handle_all_ranks(
         out_path.display()
     );
 
-    let (landing_page_path, landing_html) = generate_multi_rank_html(&out_path, sorted_ranks, cfg)?;
+    let (landing_page_path, landing_html) = generate_multi_rank_html(
+        &out_path,
+        sorted_ranks,
+        cfg,
+        !all_chromium_events.is_empty(),
+    )?;
     fs::write(&landing_page_path, landing_html)?;
     if open_browser {
         opener::open(&landing_page_path)?;

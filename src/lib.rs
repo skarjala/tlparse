@@ -1147,25 +1147,28 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
 }
 
 pub fn generate_multi_rank_html(
-    out_path: &PathBuf,
-    sorted_ranks: Vec<String>,
-    cfg: &ParseConfig,
+    out_dir: &PathBuf,
+    ranks: Vec<String>,
+    config: &ParseConfig,
+    has_chromium_events: bool,
 ) -> anyhow::Result<(PathBuf, String)> {
-    // Create the TinyTemplate instance for rendering the landing page.
     let mut tt = TinyTemplate::new();
+    tt.add_template(
+        "multi_rank_index.html",
+        templates::TEMPLATE_MULTI_RANK_INDEX,
+    )?;
     tt.add_formatter("format_unescaped", tinytemplate::format_unescaped);
-    tt.add_template("multi_rank_index.html", TEMPLATE_MULTI_RANK_INDEX)?;
 
-    let ctx = MultiRankContext {
+    let context = MultiRankContext {
         css: CSS,
-        custom_header_html: &cfg.custom_header_html,
-        num_ranks: sorted_ranks.len(),
-        ranks: sorted_ranks,
+        custom_header_html: config.custom_header_html.clone(),
+        num_ranks: ranks.len(),
+        ranks,
         qps: TEMPLATE_QUERY_PARAM_SCRIPT,
+        has_chromium_events,
     };
+    let landing_html = tt.render("multi_rank_index.html", &context)?;
+    let landing_page_path = out_dir.join("index.html");
 
-    let html = tt.render("multi_rank_index.html", &ctx)?;
-    let landing_page_path = out_path.join("index.html");
-
-    Ok((landing_page_path, html))
+    Ok((landing_page_path, landing_html))
 }
