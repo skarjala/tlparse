@@ -22,7 +22,6 @@ pub mod parsers;
 mod templates;
 mod types;
 
-// Re-export commonly-used types for external consumers (e.g. CLI)
 pub use types::RankMetaData;
 
 #[derive(Debug)]
