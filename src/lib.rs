@@ -1146,6 +1146,31 @@ pub fn parse_path(path: &PathBuf, config: &ParseConfig) -> anyhow::Result<ParseO
     Ok(output)
 }
 
+pub fn read_chromium_events_with_pid(
+    path: &std::path::Path,
+    rank_num: u32,
+) -> anyhow::Result<Vec<serde_json::Value>> {
+    use std::fs;
+
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let file_content = fs::read_to_string(path)?;
+
+    match serde_json::from_str::<Vec<serde_json::Value>>(&file_content) {
+        Ok(mut events) => {
+            for event in &mut events {
+                if let Some(obj) = event.as_object_mut() {
+                    obj.insert("pid".to_string(), serde_json::json!(rank_num));
+                }
+            }
+            Ok(events)
+        }
+        Err(_) => Ok(Vec::new()),
+    }
+}
+
 pub fn generate_multi_rank_html(
     out_path: &PathBuf,
     sorted_ranks: Vec<String>,

@@ -586,26 +586,26 @@ fn test_all_ranks_chromium_events_combined() -> Result<(), Box<dyn std::error::E
     assert!(!events.is_empty());
 
     // collect all unique process IDs (ranks) from the events
-    let pids: std::collections::HashSet<u32> = events
+    let pids: std::collections::HashSet<u64> = events
         .iter()
-        .filter_map(|event| event.get("pid").and_then(|v| v.as_u64()).map(|v| v as u32))
+        .filter_map(|event| event.get("pid").and_then(|v| v.as_u64()))
         .collect();
 
-    let expected_pids: std::collections::HashSet<u32> = [0, 2].iter().cloned().collect();
+    let expected_pids: std::collections::HashSet<u64> = [0, 2].iter().cloned().collect();
     assert_eq!(pids, expected_pids);
 
     // verify each rank-specific chromium_events.json file
-    for rank in 0..=2 {
+    for rank in 0u64..=2 {
         let rank_events_path = out_dir.join(format!("rank_{}/chromium_events.json", rank));
         assert!(rank_events_path.exists());
         let rank_events_content = fs::read_to_string(&rank_events_path)?;
         let rank_events: Vec<serde_json::Value> = serde_json::from_str(&rank_events_content)?;
 
-        if expected_pids.contains(&rank) {
+        if expected_pids.contains(&(rank as u64)) {
             assert!(!rank_events.is_empty());
             let combined_for_rank: Vec<&serde_json::Value> = events
                 .iter()
-                .filter(|ev| ev.get("pid").and_then(|v| v.as_u64()).map(|v| v as u32) == Some(rank))
+                .filter(|ev| ev.get("pid").and_then(|v| v.as_u64()) == Some(rank as u64))
                 .collect();
             assert_eq!(rank_events.len(), combined_for_rank.len());
         } else {
@@ -665,26 +665,26 @@ fn test_all_ranks_chromium_events_sparse() -> Result<(), Box<dyn std::error::Err
     assert!(!events.is_empty());
 
     // collect all unique process IDs (ranks) from the events
-    let pids: std::collections::HashSet<u32> = events
+    let pids: std::collections::HashSet<u64> = events
         .iter()
-        .filter_map(|event| event.get("pid").and_then(|v| v.as_u64()).map(|v| v as u32))
+        .filter_map(|event| event.get("pid").and_then(|v| v.as_u64()))
         .collect();
 
-    let expected_pids: std::collections::HashSet<u32> = [0, 2].iter().cloned().collect();
+    let expected_pids: std::collections::HashSet<u64> = [0, 2].iter().cloned().collect();
     assert_eq!(pids, expected_pids);
 
     // verify each rank-specific chromium_events.json file
-    for rank in 0..=2 {
+    for rank in 0u64..=2 {
         let rank_events_path = out_dir.join(format!("rank_{}/chromium_events.json", rank));
         assert!(rank_events_path.exists());
         let rank_events_content = fs::read_to_string(&rank_events_path)?;
         let rank_events: Vec<serde_json::Value> = serde_json::from_str(&rank_events_content)?;
 
-        if expected_pids.contains(&rank) {
+        if expected_pids.contains(&(rank as u64)) {
             assert!(!rank_events.is_empty());
             let combined_for_rank: Vec<&serde_json::Value> = events
                 .iter()
-                .filter(|ev| ev.get("pid").and_then(|v| v.as_u64()).map(|v| v as u32) == Some(rank))
+                .filter(|ev| ev.get("pid").and_then(|v| v.as_u64()) == Some(rank as u64))
                 .collect();
             assert_eq!(rank_events.len(), combined_for_rank.len());
         } else {

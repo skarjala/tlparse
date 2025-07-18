@@ -4,7 +4,7 @@ use anyhow::{bail, Context};
 use std::fs;
 use std::path::PathBuf;
 
-use tlparse::{generate_multi_rank_html, parse_path, ParseConfig};
+use tlparse::{generate_multi_rank_html, parse_path, read_chromium_events_with_pid, ParseConfig};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -237,15 +237,8 @@ fn handle_all_ranks(
 
         // collect chromium events for each rank
         if chromium_events_path.exists() {
-            let file_content = fs::read_to_string(&chromium_events_path)?;
-            if let Ok(mut events) = serde_json::from_str::<Vec<serde_json::Value>>(&file_content) {
-                for event in &mut events {
-                    if let Some(obj) = event.as_object_mut() {
-                        obj.insert("pid".to_string(), serde_json::json!(rank_num));
-                    }
-                }
-                all_chromium_events.extend(events);
-            }
+            let events = read_chromium_events_with_pid(&chromium_events_path, rank_num)?;
+            all_chromium_events.extend(events);
         }
     }
 
