@@ -242,16 +242,13 @@ fn handle_all_ranks(
 
         // extract compile IDs from compile_directory.json
         let mut compile_ids: FxHashSet<String> = FxHashSet::default();
-        if compile_dir_json.exists() {
-            if let Ok(content) = fs::read_to_string(&compile_dir_json) {
-                if let Ok(serde_json::Value::Object(map)) =
-                    serde_json::from_str::<serde_json::Value>(&content)
-                {
-                    for key in map.keys() {
-                        if key != "unknown" && !key.starts_with("unknown_") {
-                            compile_ids.insert(key.clone());
-                        }
-                    }
+        let content = fs::read_to_string(&compile_dir_json)?;
+        if let Ok(serde_json::Value::Object(map)) =
+            serde_json::from_str::<serde_json::Value>(&content)
+        {
+            for key in map.keys() {
+                if key != "unknown" && !key.starts_with("unknown_") {
+                    compile_ids.insert(key.clone());
                 }
             }
         }
