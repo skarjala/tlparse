@@ -4,9 +4,10 @@ use anyhow::{bail, Context};
 use std::fs;
 use std::path::PathBuf;
 
-use fxhash::FxHashSet;
+use fxhash::{FxHashMap, FxHashSet};
 use tlparse::{
-    generate_multi_rank_html, parse_path, read_chromium_events_with_pid, ParseConfig, RankMetaData,
+    generate_multi_rank_html, parse_path, read_chromium_events_with_pid, CacheDivergenceGroup,
+    ParseConfig, RankMetaData,
 };
 
 #[derive(Parser)]
@@ -240,21 +241,40 @@ fn handle_all_ranks(
 
         handle_one_rank(cfg, log_path, false, subdir, false, overwrite)?;
 
-        // extract compile IDs from compile_directory.json
+        // extract compile IDs and cache sequence from compile_directory.json
         let mut compile_ids: FxHashSet<String> = FxHashSet::default();
         let content = fs::read_to_string(&compile_dir_json)?;
+        let mut artifact_entries: Vec<(u64, String)> = Vec::new();
+
         if let Ok(serde_json::Value::Object(map)) =
             serde_json::from_str::<serde_json::Value>(&content)
         {
-            for key in map.keys() {
+            for (key, val) in map.iter() {
                 if key != "unknown" && !key.starts_with("unknown_") {
                     compile_ids.insert(key.clone());
                 }
+
+                if let Some(arr) = val.get("artifacts").and_then(|v| v.as_array()) {
+                    for art in arr {
+                        let suffix = art.get("suffix").and_then(|s| s.as_str()).unwrap_or("");
+                        if suffix.is_empty() {
+                            continue;
+                        }
+                        if let Some(num) = art.get("number").and_then(|n| n.as_u64()) {
+                            artifact_entries.push((num, suffix.to_string()));
+                        }
+                    }
+                }
             }
         }
+
+        artifact_entries.sort_by_key(|(n, _)| *n);
+        let cache_sequence: String = artifact_entries.into_iter().map(|(_, s)| s).collect();
+
         rank_metadata.push(RankMetaData {
             rank: rank_num,
             compile_ids,
+            cache_sequence,
         });
 
         // collect chromium events for each rank
@@ -272,6 +292,34 @@ fn handle_all_ranks(
     } else {
         false
     };
+
+    // Group ranks by their cache hit/miss sequence
+    let seq_groups: FxHashMap<String, FxHashSet<u32>> =
+        rank_metadata
+            .iter()
+            .fold(FxHashMap::default(), |mut acc, md| {
+                acc.entry(md.cache_sequence.clone())
+                    .or_default()
+                    .insert(md.rank);
+                acc
+            });
+
+    // Build groups describing cache hit/miss patterns per rank
+    let divergence_groups: Vec<CacheDivergenceGroup> = seq_groups
+        .iter()
+        .map(|(seq, set)| {
+            let mut ranks_vec: Vec<u32> = set.iter().copied().collect();
+            ranks_vec.sort_unstable();
+            CacheDivergenceGroup {
+                sequence: seq.clone(),
+                ranks: ranks_vec
+                    .iter()
+                    .map(|r| r.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            }
+        })
+        .collect();
 
     // combine chromium events from all ranks
     if !all_chromium_events.is_empty() {
@@ -291,6 +339,7 @@ fn handle_all_ranks(
         cfg,
         !all_chromium_events.is_empty(),
         show_desync_warning,
+        divergence_groups,
     )?;
     fs::write(&landing_page_path, landing_html)?;
     if open_browser {
