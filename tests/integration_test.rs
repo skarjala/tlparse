@@ -736,7 +736,7 @@ fn test_diverging_compile_ids_warning() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-// Two ranks with identical logs ⇒ no divergence warning.
+// Two ranks with identical logs, no divergence warning
 #[test]
 fn test_no_compile_id_divergence() -> Result<(), Box<dyn std::error::Error>> {
     // Create temp input dir with identical logs for rank 0 and 1
