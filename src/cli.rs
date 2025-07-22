@@ -253,7 +253,6 @@ fn handle_all_ranks(
                 if key != "unknown" && !key.starts_with("unknown_") {
                     compile_ids.insert(key.clone());
                 }
-
                 if let Some(arr) = val.get("artifacts").and_then(|v| v.as_array()) {
                     for art in arr {
                         let suffix = art.get("suffix").and_then(|s| s.as_str()).unwrap_or("");
