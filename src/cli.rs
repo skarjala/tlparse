@@ -297,9 +297,7 @@ fn handle_all_ranks(
         rank_metadata
             .into_iter()
             .fold(FxHashMap::default(), |mut acc, md| {
-                acc.entry(md.cache_sequence)
-                    .or_default()
-                    .push(md.rank);
+                acc.entry(md.cache_sequence).or_default().push(md.rank);
                 acc
             });
 
