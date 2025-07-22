@@ -295,9 +295,9 @@ fn handle_all_ranks(
     // Group ranks by their cache hit/miss sequence
     let seq_groups: FxHashMap<String, Vec<u32>> =
         rank_metadata
-            .iter()
+            .into_iter()
             .fold(FxHashMap::default(), |mut acc, md| {
-                acc.entry(md.cache_sequence.clone())
+                acc.entry(md.cache_sequence)
                     .or_default()
                     .push(md.rank);
                 acc
