@@ -762,8 +762,16 @@ fn test_no_compile_id_divergence() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert().success();
 
     let landing_page = temp_out.path().join("index.html");
+    assert!(
+        landing_page.exists(),
+        "Expected {} to exist",
+        landing_page.display()
+    );
     let landing_content = fs::read_to_string(&landing_page)?;
-    assert!(!landing_content.contains("Diverging Compilation IDs detected"));
+    assert!(
+        !landing_content.contains("Diverging Compilation IDs detected"),
+        "Did not expect divergence warning for identical logs"
+    );
 
     Ok(())
 }
