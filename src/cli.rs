@@ -294,25 +294,25 @@ fn handle_all_ranks(
     };
 
     // Group ranks by their cache hit/miss sequence
-    let seq_groups: FxHashMap<String, FxHashSet<u32>> =
+    let seq_groups: FxHashMap<String, Vec<u32>> =
         rank_metadata
             .iter()
             .fold(FxHashMap::default(), |mut acc, md| {
                 acc.entry(md.cache_sequence.clone())
                     .or_default()
-                    .insert(md.rank);
+                    .push(md.rank);
                 acc
             });
 
     // Build groups describing cache hit/miss patterns per rank
     let divergence_groups: Vec<CacheDivergenceGroup> = seq_groups
         .iter()
-        .map(|(seq, set)| {
-            let mut ranks_vec: Vec<u32> = set.iter().copied().collect();
-            ranks_vec.sort_unstable();
+        .map(|(seq, ranks_vec)| {
+            let mut sorted_ranks = ranks_vec.clone();
+            sorted_ranks.sort_unstable();
             CacheDivergenceGroup {
                 sequence: seq.clone(),
-                ranks: ranks_vec
+                ranks: sorted_ranks
                     .iter()
                     .map(|r| r.to_string())
                     .collect::<Vec<_>>()
