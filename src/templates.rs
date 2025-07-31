@@ -561,7 +561,7 @@ pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
     </ul>
     {{ endif }}
     {{ if has_collective_divergence }}
-    <p><strong>Warning:</strong> Diverging collective operation sequences detected across ranks. This can lead to deadlocks during distributed execution.</p>
+    <p><strong>Warning:</strong> Diverging collective operation sequences detected across ranks. This can lead to hangs or timeouts during distributed execution.</p>
     <p>Collective operation sequence groups:</p>
     <ul>
         {{ for group in collective_divergence_groups }}
