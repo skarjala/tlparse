@@ -302,22 +302,25 @@ fn handle_all_ranks(
             });
 
     // Build groups describing cache hit/miss patterns per rank
-    let divergence_groups: Vec<DivergenceGroup> = cache_seq_groups
-        .iter()
-        .filter(|_| cache_seq_groups.len() > 1)
-        .map(|(seq, ranks_vec)| {
-            let mut sorted_ranks = ranks_vec.clone();
-            sorted_ranks.sort_unstable();
-            DivergenceGroup {
-                sequence: seq.clone(),
-                ranks: sorted_ranks
-                    .iter()
-                    .map(|r| r.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            }
-        })
-        .collect();
+    let cache_divergence_groups: Vec<DivergenceGroup> = if cache_seq_groups.len() > 1 {
+        cache_seq_groups
+            .iter()
+            .map(|(seq, ranks_vec)| {
+                let mut sorted_ranks = ranks_vec.clone();
+                sorted_ranks.sort_unstable();
+                DivergenceGroup {
+                    sequence: seq.clone(),
+                    ranks: sorted_ranks
+                        .iter()
+                        .map(|r| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     // combine chromium events from all ranks
     if !all_chromium_events.is_empty() {
@@ -354,22 +357,25 @@ fn handle_all_ranks(
         }
     }
 
-    let collective_divergence_groups: Vec<DivergenceGroup> = collective_seq_groups
-        .iter()
-        .filter(|_| collective_seq_groups.len() > 1)
-        .map(|(seq, ranks_vec)| {
-            let mut sorted_ranks = ranks_vec.clone();
-            sorted_ranks.sort_unstable();
-            DivergenceGroup {
-                sequence: seq.clone(),
-                ranks: sorted_ranks
-                    .iter()
-                    .map(|r| r.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            }
-        })
-        .collect();
+    let collective_divergence_groups: Vec<DivergenceGroup> = if collective_seq_groups.len() > 1 {
+        collective_seq_groups
+            .iter()
+            .map(|(seq, ranks_vec)| {
+                let mut sorted_ranks = ranks_vec.clone();
+                sorted_ranks.sort_unstable();
+                DivergenceGroup {
+                    sequence: seq.clone(),
+                    ranks: sorted_ranks
+                        .iter()
+                        .map(|r| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     println!(
         "Multi-rank report generated under {}\nIndividual pages: rank_*/index.html",
@@ -382,7 +388,7 @@ fn handle_all_ranks(
         cfg,
         !all_chromium_events.is_empty(),
         compile_id_divergence || cache_seq_groups.len() > 1 || collective_seq_groups.len() > 1,
-        divergence_groups,
+        cache_divergence_groups,
         collective_divergence_groups,
         compile_id_divergence,
         cache_seq_groups.len() > 1,

@@ -555,7 +555,7 @@ pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
     {{ if has_cache_divergence }}
     <p><strong>Warning:</strong> Diverging Cache hit/miss patterns detected across ranks. Cache hit/miss pattern groups:</p>
     <ul>
-        {{ for group in divergence_groups }}
+        {{ for group in cache_divergence_groups }}
             <li>Ranks: {group.ranks}</li>
         {{ endfor }}
     </ul>

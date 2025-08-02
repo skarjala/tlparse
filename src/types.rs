@@ -864,7 +864,7 @@ pub struct MultiRankContext<'a> {
     pub qps: &'a str,
     pub has_chromium_events: bool,
     pub show_desync_warning: bool,
-    pub divergence_groups: Vec<DivergenceGroup>,
+    pub cache_divergence_groups: Vec<DivergenceGroup>,
     pub collective_divergence_groups: Vec<DivergenceGroup>,
     pub compile_id_divergence: bool,
     pub has_cache_divergence: bool,
