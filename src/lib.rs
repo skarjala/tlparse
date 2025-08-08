@@ -1187,7 +1187,6 @@ pub fn generate_multi_rank_html(
     has_cache_divergence: bool,
     has_collective_divergence: bool,
     runtime_analysis: Option<RuntimeAnalysis>,
-    runtime_analysis: Option<RuntimeAnalysis>,
     has_runtime_trace: bool,
 ) -> anyhow::Result<(PathBuf, String)> {
     // Create the TinyTemplate instance for rendering the landing page.
@@ -1208,7 +1207,6 @@ pub fn generate_multi_rank_html(
         compile_id_divergence,
         has_cache_divergence,
         has_collective_divergence,
-        runtime_analysis,
         runtime_analysis,
         has_runtime_trace,
     };
