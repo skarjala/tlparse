@@ -338,6 +338,51 @@ fn handle_all_ranks(
             serde_json::to_string_pretty(&runtime_estimations)?,
         )?;
         println!("Runtime estimations: {}", runtime_path.display());
+
+        // Generate runtime trace events with functional approach
+        let runtime_events: Vec<serde_json::Value> = runtime_estimations
+            .iter()
+            .fold(std::collections::HashMap::new(), |mut groups, gr| {
+                groups
+                    .entry(gr.graph.clone())
+                    .or_insert_with(Vec::new)
+                    .push(gr);
+                groups
+            })
+            .into_iter()
+            .flat_map(|(graph_name, graph_ranks)| {
+                let tid = graph_name.chars().map(|c| c as u32).sum::<u32>() % 1000;
+                let graph_name = std::rc::Rc::new(graph_name);
+                graph_ranks.into_iter().flat_map(move |gr| {
+                    let graph_name = graph_name.clone();
+                    let mut time_offset_us = 0u64;
+                    gr.ops.iter().map(move |op| {
+                        let dur_us = (op.estimated_runtime_ns / 1000.0).ceil().max(1.0) as u64;
+                        let event = serde_json::json!({
+                            "name": op.name,
+                            "ph": "X",
+                            "ts": time_offset_us,
+                            "dur": dur_us,
+                            "pid": gr.rank,
+                            "tid": tid,
+                            "cat": "runtime",
+                            "args": {
+                                "graph": graph_name.as_ref(),
+                                "rank": gr.rank,
+                                "runtime_ns": op.estimated_runtime_ns as u64
+                            }
+                        });
+                        time_offset_us += dur_us;
+                        event
+                    })
+                })
+            })
+            .collect();
+
+        fs::write(
+            out_path.join("chromium_trace_with_runtime.json"),
+            serde_json::to_string_pretty(&runtime_events)?,
+        )?;
     }
 
     // Analyze graph runtime deltas across ranks
@@ -412,6 +457,7 @@ fn handle_all_ranks(
         cache_seq_groups.len() > 1,
         collective_seq_groups.len() > 1,
         runtime_analysis,
+        !runtime_estimations.is_empty(),
     )?;
     fs::write(&landing_page_path, landing_html)?;
     if open_browser {

@@ -1188,6 +1188,7 @@ pub fn generate_multi_rank_html(
     has_collective_divergence: bool,
     runtime_analysis: Option<RuntimeAnalysis>,
     runtime_analysis: Option<RuntimeAnalysis>,
+    has_runtime_trace: bool,
 ) -> anyhow::Result<(PathBuf, String)> {
     // Create the TinyTemplate instance for rendering the landing page.
     let mut tt = TinyTemplate::new();
@@ -1209,6 +1210,7 @@ pub fn generate_multi_rank_html(
         has_collective_divergence,
         runtime_analysis,
         runtime_analysis,
+        has_runtime_trace,
     };
     let html = tt.render("multi_rank_index.html", &ctx)?;
     let landing_page_path = out_path.join("index.html");
@@ -1287,23 +1289,18 @@ fn compare_graph_runtimes(
             );
 
             let delta_ns = max_runtime - min_runtime;
-            let graph_id = runtimes[0].1.to_string();
 
             Some(GraphAnalysis {
                 graph_index: index,
-                delta_ns: delta_ns.round(),
+                graph_id: runtimes[0].1.to_string(),
                 delta_ms: (delta_ns / 1e6 * 1000.0).round() / 1000.0,
                 rank_details: vec![
                     RuntimeRankDetail {
                         rank: fastest_rank,
-                        graph_id: graph_id.clone(),
-                        runtime_ns: min_runtime.round(),
                         runtime_ms: (min_runtime / 1e6 * 1000.0).round() / 1000.0,
                     },
                     RuntimeRankDetail {
                         rank: slowest_rank,
-                        graph_id,
-                        runtime_ns: max_runtime.round(),
                         runtime_ms: (max_runtime / 1e6 * 1000.0).round() / 1000.0,
                     },
                 ],
@@ -1324,7 +1321,7 @@ pub fn analyze_graph_runtime_deltas(
     };
 
     let mut graphs = compare_graph_runtimes(rank_graphs, ranks, max_graphs);
-    graphs.sort_by(|a, b| a.rank_details[0].graph_id.cmp(&b.rank_details[0].graph_id));
+    graphs.sort_by(|a, b| a.graph_id.cmp(&b.graph_id));
 
     Some(RuntimeAnalysis {
         graphs,

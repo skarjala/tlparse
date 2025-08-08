@@ -584,6 +584,14 @@ You can download and view them in a tool like <a href='https://ui.perfetto.dev/'
 This is a combined trace from all ranks.
 </p>
 {{ endif }}
+{{ if has_runtime_trace }}
+<h3> Runtime Trace Visualization </h3>
+<p>
+<a href='chromium_trace_with_runtime.json'>Runtime Estimation Chromium Trace</a> shows estimated runtime per operation across all ranks and graphs.
+Each rank appears as a separate process (PID) in the trace; within each process, each compiled graph is visualized as its own thread (TID). Operations are laid out sequentially by estimated duration on that thread.
+You can download and view this trace in <a href='https://ui.perfetto.dev/'>Perfetto</a> to visualize performance differences across ranks.
+</p>
+{{ endif }}
 <p>
 Individual rank reports:
 </p>
@@ -606,7 +614,7 @@ helping identify performance imbalances that could impact distributed training e
 desync issues on specific ranks.
 </p>
 {{ for graph in runtime_analysis.graphs }}
-<p><strong>Graph {graph.rank_details.0.graph_id}:</strong> {graph.delta_ms} ms delta (Fastest: Rank {graph.rank_details.0.rank} - {graph.rank_details.0.runtime_ms} ms, Slowest: Rank {graph.rank_details.1.rank} - {graph.rank_details.1.runtime_ms} ms)</p>
+<p><strong>Graph {graph.graph_id}:</strong> {graph.delta_ms} ms delta (Fastest: Rank {graph.rank_details.0.rank} - {graph.rank_details.0.runtime_ms} ms, Slowest: Rank {graph.rank_details.1.rank} - {graph.rank_details.1.runtime_ms} ms)</p>
 {{ endfor }}
 {{ endif }}
 {{ endif }}
