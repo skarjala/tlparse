@@ -344,11 +344,17 @@ fn handle_all_ranks(
         let mut pid_set: FxHashSet<u32> = FxHashSet::default();
         let mut thread_names: FxHashMap<(u32, u32), String> = FxHashMap::default();
 
-        let calc_tid = |s: &str| -> u32 { s.chars().map(|c| c as u32).sum::<u32>() % 1000 };
+        // Concise, deterministic 32-bit TID from (rank, graph)
+        let calc_tid = |rank: u32, graph: &str| -> u32 {
+            use std::hash::{Hash, Hasher};
+            let mut h = fxhash::FxHasher::default();
+            (rank, graph).hash(&mut h);
+            (h.finish() & 0xFFFF_FFFF) as u32
+        };
 
         for gr in &runtime_estimations {
             pid_set.insert(gr.rank);
-            let tid = calc_tid(&gr.graph);
+            let tid = calc_tid(gr.rank, &gr.graph);
             thread_names
                 .entry((gr.rank, tid))
                 .or_insert_with(|| gr.graph.clone());
