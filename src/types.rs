@@ -45,6 +45,14 @@ pub struct CollectiveSchedule {
     pub ops: Vec<String>,
 }
 
+/// Canonical fingerprint for tensor meta JSON for a given graph on a rank
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TensorMetaFingerprint {
+    pub rank: u32,
+    pub graph: String,
+    pub fingerprint: String,
+}
+
 /// Estimated runtime entry for a single op within a graph.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpRuntime {

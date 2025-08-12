@@ -618,6 +618,17 @@ desync issues on specific ranks.
 {{ endfor }}
 {{ endif }}
 {{ endif }}
+{{ if has_tensor_meta_divergence }}
+<h3>Tensor Meta Divergence</h3>
+<p>
+Ranks exhibit divergent inductor tensor meta across graphs. Groups with identical signatures:
+</p>
+<ul>
+    {{ for group in tensor_meta_divergence_groups }}
+        <li>Ranks: {group.ranks}</li>
+    {{ endfor }}
+    </ul>
+{{ endif }}
 </div>
 {qps | format_unescaped}
 </body>
