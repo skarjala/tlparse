@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use fxhash::{FxHashMap, FxHashSet};
 use tlparse::{
     analyze_graph_runtime_deltas, generate_multi_rank_html, parse_path,
-    read_chromium_events_with_pid, DivergenceGroup, ParseConfig, RankMetaData,
+    read_chromium_events_with_pid, ArtifactFlags, Diagnostics, DivergenceFlags, DivergenceGroup,
+    ParseConfig, RankMetaData,
 };
 
 #[derive(Parser)]
@@ -383,8 +384,10 @@ fn handle_all_ranks(
         // Place metadata after runtime events to keep the first event as an execution event
         let mut all_events = runtime_events;
 
-        // Process metadata succinctly and without duplicates
-        for pid in pid_set.into_iter() {
+        // Emit process (rank) metadata in ascending pid order
+        let mut pids: Vec<u32> = pid_set.into_iter().collect();
+        pids.sort_unstable();
+        for pid in pids.into_iter() {
             all_events.push(serde_json::json!({
                 "name": "process_name",
                 "ph": "M",
@@ -393,7 +396,14 @@ fn handle_all_ranks(
             }));
         }
 
-        for ((pid, tid), graph_name) in thread_names.into_iter() {
+        // Emit thread names sorted by (pid, tid)
+        let mut threads: Vec<((u32, u32), String)> = thread_names.into_iter().collect();
+        threads.sort_by(|a, b| {
+            let (apid, atid) = (a.0 .0, a.0 .1);
+            let (bpid, btid) = (b.0 .0, b.0 .1);
+            apid.cmp(&bpid).then(atid.cmp(&btid))
+        });
+        for ((pid, tid), graph_name) in threads.into_iter() {
             all_events.push(serde_json::json!({
                 "name": "thread_name",
                 "ph": "M",
@@ -469,6 +479,17 @@ fn handle_all_ranks(
         out_path.display()
     );
 
+    let diagnostics = Diagnostics {
+        divergence: DivergenceFlags {
+            cache: cache_seq_groups.len() > 1,
+            collective: collective_seq_groups.len() > 1,
+        },
+        artifacts: ArtifactFlags {
+            runtime_trace: !runtime_estimations.is_empty(),
+        },
+        analysis: runtime_analysis,
+    };
+
     let (landing_page_path, landing_html) = generate_multi_rank_html(
         &out_path,
         sorted_ranks,
@@ -478,10 +499,7 @@ fn handle_all_ranks(
         cache_divergence_groups,
         collective_divergence_groups,
         compile_id_divergence,
-        cache_seq_groups.len() > 1,
-        collective_seq_groups.len() > 1,
-        runtime_analysis,
-        !runtime_estimations.is_empty(),
+        diagnostics,
     )?;
     fs::write(&landing_page_path, landing_html)?;
     if open_browser {
