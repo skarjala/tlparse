@@ -381,36 +381,58 @@ fn handle_all_ranks(
             }
         }
 
-        // Place metadata after runtime events to keep the first event as an execution event
-        let mut all_events = runtime_events;
+        let mut all_events: Vec<serde_json::Value> = runtime_events;
 
         // Emit process (rank) metadata in ascending pid order
         let mut pids: Vec<u32> = pid_set.into_iter().collect();
         pids.sort_unstable();
         for pid in pids.into_iter() {
-            all_events.push(serde_json::json!({
-                "name": "process_name",
-                "ph": "M",
-                "pid": pid,
-                "args": {"name": "Rank"}
-            }));
+            all_events.extend([
+                serde_json::json!({
+                    "name": "process_name",
+                    "ph": "M",
+                    "pid": pid,
+                    "args": {"name": format!("Rank {}", pid)}
+                }),
+                serde_json::json!({
+                    "name": "process_sort_index",
+                    "ph": "M",
+                    "pid": pid,
+                    "args": {"sort_index": pid as i64}
+                }),
+            ]);
         }
 
-        // Emit thread names sorted by (pid, tid)
-        let mut threads: Vec<((u32, u32), String)> = thread_names.into_iter().collect();
-        threads.sort_by(|a, b| {
-            let (apid, atid) = (a.0 .0, a.0 .1);
-            let (bpid, btid) = (b.0 .0, b.0 .1);
-            apid.cmp(&bpid).then(atid.cmp(&btid))
-        });
-        for ((pid, tid), graph_name) in threads.into_iter() {
-            all_events.push(serde_json::json!({
-                "name": "thread_name",
-                "ph": "M",
-                "pid": pid,
-                "tid": tid,
-                "args": {"name": format!("graph {}", graph_name)}
-            }));
+        // Emit thread names sorted by graph name within each pid
+        let mut threads_by_pid: FxHashMap<u32, Vec<(u32, String)>> = FxHashMap::default();
+        for ((pid, tid), graph_name) in thread_names.into_iter() {
+            threads_by_pid
+                .entry(pid)
+                .or_default()
+                .push((tid, graph_name));
+        }
+        let mut pids_for_threads: Vec<u32> = threads_by_pid.keys().copied().collect();
+        pids_for_threads.sort_unstable();
+        for pid in pids_for_threads {
+            let entries = threads_by_pid.remove(&pid).unwrap_or_default();
+            for (idx, (tid, graph_name)) in entries.into_iter().enumerate() {
+                all_events.extend([
+                    serde_json::json!({
+                        "name": "thread_name",
+                        "ph": "M",
+                        "pid": pid,
+                        "tid": tid,
+                        "args": {"name": format!("graph {}", graph_name)}
+                    }),
+                    serde_json::json!({
+                        "name": "thread_sort_index",
+                        "ph": "M",
+                        "pid": pid,
+                        "tid": tid,
+                        "args": {"sort_index": idx as i64}
+                    }),
+                ]);
+            }
         }
 
         fs::write(
