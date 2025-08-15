@@ -1175,7 +1175,7 @@ fn test_tensor_meta_divergence_groups() -> Result<(), Box<dyn std::error::Error>
     let html_content = fs::read_to_string(&landing_page)?;
 
     // Should always show tensor meta analysis section
-    assert!(html_content.contains("Tensor Meta Analysis"));
+    assert!(html_content.contains("Tensor Metadata Analysis"));
 
     // Should show divergence since ranks have different tensor meta
     assert!(html_content.contains("Ranks exhibit divergent inductor tensor meta"));
