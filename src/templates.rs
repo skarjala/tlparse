@@ -618,10 +618,13 @@ desync issues on specific ranks.
 {{ endfor }}
 {{ endif }}
 {{ endif }}
-<h3>Tensor Meta Analysis</h3>
+<h3>Tensor Metadata Analysis</h3>
+<p>
+Compares inductor tensor metadata (shapes, dtypes, devices, strides, etc.) across ranks to detect compilation divergence.
+</p>
 {{ if diagnostics.divergence.tensor_meta }}
 <p>
-Ranks exhibit divergent inductor tensor meta across graphs. Groups with identical signatures:
+Ranks exhibit divergent inductor tensor metadata across graphs. Groups with identical signatures:
 </p>
 <ul>
     {{ for group in diagnostics.tensor_meta_groups }}
