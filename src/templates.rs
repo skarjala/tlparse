@@ -620,7 +620,7 @@ desync issues on specific ranks.
 {{ endif }}
 <h3>Tensor Metadata Analysis</h3>
 <p>
-Compares inductor tensor metadata (shapes, dtypes, devices, strides, etc.) across ranks to detect compilation divergence.
+Compares inductor tensor metadata (shapes, dtypes, strides) across ranks to detect compilation divergence.
 </p>
 {{ if diagnostics.divergence.tensor_meta }}
 <p>
