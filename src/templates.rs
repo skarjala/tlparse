@@ -555,7 +555,7 @@ pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
     {{ if diagnostics.divergence.cache }}
     <p><strong>Warning:</strong> Diverging Cache hit/miss patterns detected across ranks. Cache hit/miss pattern groups:</p>
     <ul>
-        {{ for group in cache_divergence_groups }}
+        {{ for group in diagnostics.cache_groups }}
             <li>Ranks: {group.ranks}</li>
         {{ endfor }}
     </ul>
@@ -564,7 +564,7 @@ pub static TEMPLATE_MULTI_RANK_INDEX: &str = r#"
     <p><strong>Warning:</strong> Diverging collective operation sequences detected across ranks. This can lead to hangs or timeouts during distributed execution.</p>
     <p>Collective operation sequence groups:</p>
     <ul>
-        {{ for group in collective_divergence_groups }}
+        {{ for group in diagnostics.collective_groups }}
             <li>Ranks: {group.ranks}</li>
         {{ endfor }}
     </ul>
@@ -618,16 +618,20 @@ desync issues on specific ranks.
 {{ endfor }}
 {{ endif }}
 {{ endif }}
-{{ if has_tensor_meta_divergence }}
-<h3>Tensor Meta Divergence</h3>
+<h3>Tensor Meta Analysis</h3>
+{{ if diagnostics.divergence.tensor_meta }}
 <p>
 Ranks exhibit divergent inductor tensor meta across graphs. Groups with identical signatures:
 </p>
 <ul>
-    {{ for group in tensor_meta_divergence_groups }}
+    {{ for group in diagnostics.tensor_meta_groups }}
         <li>Ranks: {group.ranks}</li>
     {{ endfor }}
     </ul>
+{{ else }}
+<p>
+All ranks have matching tensor meta signatures across graphs.
+</p>
 {{ endif }}
 </div>
 {qps | format_unescaped}

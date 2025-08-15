@@ -32,7 +32,7 @@ pub struct RankMetaData {
 }
 
 /// Grouping of ranks that share the same sequence pattern (cache, collective ops, etc.).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DivergenceGroup {
     pub sequence: String,
     pub ranks: String,
@@ -905,6 +905,7 @@ pub struct ProvenanceContext<'a> {
 pub struct DivergenceFlags {
     pub cache: bool,
     pub collective: bool,
+    pub tensor_meta: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
@@ -917,6 +918,9 @@ pub struct Diagnostics {
     pub divergence: DivergenceFlags,
     pub artifacts: ArtifactFlags,
     pub analysis: Option<RuntimeAnalysis>,
+    pub cache_groups: Vec<DivergenceGroup>,
+    pub collective_groups: Vec<DivergenceGroup>,
+    pub tensor_meta_groups: Vec<DivergenceGroup>,
 }
 
 #[derive(Serialize)]
@@ -928,8 +932,6 @@ pub struct MultiRankContext<'a> {
     pub qps: &'a str,
     pub has_chromium_events: bool,
     pub show_desync_warning: bool,
-    pub cache_divergence_groups: Vec<DivergenceGroup>,
-    pub collective_divergence_groups: Vec<DivergenceGroup>,
     pub compile_id_divergence: bool,
     pub diagnostics: Diagnostics,
 }

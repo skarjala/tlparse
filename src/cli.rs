@@ -467,7 +467,10 @@ fn handle_all_ranks(
         // rank -> sorted list of (graph_id, fingerprint)
         let mut by_rank: HashMap<u32, Vec<(String, String)>> = HashMap::new();
         for tm in &tensor_meta {
-            by_rank.entry(tm.rank).or_default().push((tm.graph.clone(), tm.fingerprint.clone()));
+            by_rank
+                .entry(tm.rank)
+                .or_default()
+                .push((tm.graph.clone(), tm.fingerprint.clone()));
         }
         for (&rank, entries) in &mut by_rank {
             // sort by graph id to make cross-rank concatenation consistent
@@ -548,11 +551,15 @@ fn handle_all_ranks(
         divergence: DivergenceFlags {
             cache: cache_seq_groups.len() > 1,
             collective: collective_seq_groups.len() > 1,
+            tensor_meta: tensor_meta_groups.len() > 1,
         },
         artifacts: ArtifactFlags {
             runtime_trace: !runtime_estimations.is_empty(),
         },
         analysis: runtime_analysis,
+        cache_groups: cache_divergence_groups.clone(),
+        collective_groups: collective_divergence_groups.clone(),
+        tensor_meta_groups: tensor_meta_divergence_groups.clone(),
     };
 
     let (landing_page_path, landing_html) = generate_multi_rank_html(
@@ -561,10 +568,9 @@ fn handle_all_ranks(
         cfg,
         !all_chromium_events.is_empty(),
         compile_id_divergence
-            || cache_seq_groups.len() > 1
-            || collective_seq_groups.len() > 1,
-        cache_divergence_groups,
-        collective_divergence_groups,
+            || diagnostics.divergence.cache
+            || diagnostics.divergence.collective
+            || diagnostics.divergence.tensor_meta,
         compile_id_divergence,
         diagnostics,
     )?;

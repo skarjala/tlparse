@@ -713,7 +713,7 @@ pub fn read_tensor_meta_fingerprints(
     read_artifacts(
         out_path,
         rank_nums,
-        "inductor_tlparse_tensor_meta",
+        "inductor_runtime_and_tensor_meta",
         |content, rank, graph| {
             // Canonicalize JSON: parse Value and serialize compact to ensure stable formatting
             let json_value: serde_json::Value = serde_json::from_str(content)?;
