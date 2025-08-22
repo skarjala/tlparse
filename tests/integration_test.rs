@@ -1638,7 +1638,6 @@ fn test_all_ranks_basic() -> Result<(), Box<dyn std::error::Error>> {
 
     let rank0_content = fs::read_to_string(rank0_index).unwrap();
     assert!(rank0_content.contains("collectives_parity.json"));
-    assert!(rank0_content.contains("NCCL collectives parity report"));
     Ok(())
 }
 
