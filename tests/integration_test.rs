@@ -2446,38 +2446,37 @@ fn test_execution_order_multi_rank_divergence() -> anyhow::Result<()> {
 
 #[test]
 fn test_collectives_parity_detects_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = tempdir()?;
-    let out_dir = temp_dir.path();
-    let rank_dir = out_dir.join("rank_0");
-    let compile_dir = rank_dir.join("graph_dir");
-    std::fs::create_dir_all(&compile_dir)?;
+    let input_dir = PathBuf::from("tests/inputs/collectives_parity");
+    let temp_out = tempdir()?;
+    let out_dir = temp_out.path();
 
-    let compile_dir_json = serde_json::json!({
-        "cid0": {
-            "artifacts": [{"url": "graph_dir/file"}]
-        }
-    });
-    fs::write(
-        rank_dir.join("compile_directory.json"),
-        serde_json::to_string(&compile_dir_json)?,
-    )?;
+    let mut cmd = Command::cargo_bin("tlparse")?;
+    cmd.arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser");
+    cmd.assert().success();
 
-    let schedule = serde_json::json!(["nccl.all_reduce", "nccl.all_gather"]);
-    fs::write(
-        compile_dir.join("inductor_collective_schedule_0.json"),
-        serde_json::to_string(&schedule)?,
-    )?;
+    // Run collectives parity check on generated outputs
+    let out_dir_buf = out_dir.to_path_buf();
+    parsers::check_collectives_parity(&out_dir_buf, &[0, 1, 2])?;
 
-    fs::write(
-        compile_dir.join("inductor_output_code_0.py"),
-        "nccl.all_reduce(x)",
-    )?;
+    // Verify rank 0 parity report exists and contains at least one mismatch
+    let rank_0_report_path = out_dir.join("rank_0").join("collectives_parity.json");
+    assert!(
+        rank_0_report_path.exists(),
+        "collectives_parity.json for rank 0 should exist"
+    );
+    let rank_0_report: CollectivesParityReport =
+        serde_json::from_str(&fs::read_to_string(&rank_0_report_path)?)?;
+    // Expect a single mismatch entry for graph -_0_1_0 with compile_id [0/1] and offset 1
+    assert_eq!(rank_0_report.graphs.len(), 1);
+    let g = &rank_0_report.graphs[0];
+    assert_eq!(g.graph, "-_0_1_0");
+    assert_eq!(g.compile_id, "[0/1]");
+    assert_eq!(g.offset, 1);
 
-    parsers::check_collectives_parity(&out_dir.to_path_buf(), &[0])?;
-
-    let report_content = fs::read_to_string(rank_dir.join("collectives_parity.json"))?;
-    let report: CollectivesParityReport = serde_json::from_str(&report_content)?;
-    assert_eq!(report.graphs.len(), 1);
-    assert_eq!(report.graphs[0].offset, 1);
     Ok(())
 }

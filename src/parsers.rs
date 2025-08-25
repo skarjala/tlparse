@@ -758,8 +758,12 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
         "all_to_all",
     ];
 
-    let code_re = Regex::new("(all_reduce|reduce_scatter|all_gather|broadcast|reduce|all_to_all)")?;
-    let comment_re = Regex::new(r"(?m)#.*$|//.*$|(?s)/\*.*?\*/")?;
+    // Match c10d functional calls: torch.ops._c10d_functional.<op>.default(
+    let call_re = Regex::new(
+        r"torch\s*\.\s*ops\s*\.\s*_?c10d_functional\s*\.\s*(reduce_scatter_tensor|all_gather_into_tensor|all_to_all|all_reduce_|broadcast|reduce)\s*\.\s*default\s*\(",
+    )?;
+    let comment_re = Regex::new(r"(?m)^\s*#.*$|\s#[^0-9a-fA-F].*$|//.*$|(?s)/\*.*?\*/")?;
+    let html_tag_re = Regex::new(r"(?s)<[^>]*>")?;
 
     for &rank in rank_nums {
         let rank_dir = out_path.join(format!("rank_{rank}"));
@@ -767,15 +771,14 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
             continue;
         }
 
-        // Map compile directory names (e.g. graph folders) to compile IDs
+        // Map compile directory (graph folder) name prefix -> compile ID
         let dir_to_compile_id: HashMap<String, String> =
             fs::read_to_string(rank_dir.join("compile_directory.json"))
                 .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
                 .and_then(|v| {
                     v.as_object().map(|obj| {
-                        let mut m = HashMap::new();
-                        for (cid, entry) in obj {
+                        obj.iter().fold(HashMap::new(), |mut m, (cid, entry)| {
                             if let Some(arts) = entry.get("artifacts").and_then(|x| x.as_array()) {
                                 for a in arts {
                                     if let Some(url) = a.get("url").and_then(|x| x.as_str()) {
@@ -786,8 +789,8 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                                     }
                                 }
                             }
-                        }
-                        m
+                            m
+                        })
                     })
                 })
                 .unwrap_or_default();
@@ -803,7 +806,6 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
             .map(|e| e.path())
             .filter(|p| p.is_dir())
         {
-            // Find schedule and code paths within the compile directory
             let (mut schedule_path, mut code_path) = (None, None);
             for p in fs::read_dir(&compile_dir)?.flatten().map(|e| e.path()) {
                 let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -811,7 +813,7 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                     && stem.starts_with("inductor_collective_schedule")
                 {
                     schedule_path = Some(p);
-                } else if stem.starts_with("inductor_output_code") {
+                } else if stem.starts_with("inductor_output_code") && code_path.is_none() {
                     code_path = Some(p);
                 }
             }
@@ -820,9 +822,8 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 continue;
             };
 
-            // Schedule counts
-            let schedule_src = fs::read_to_string(schedule)?;
-            let raw_ops: Vec<String> = serde_json::from_str(&schedule_src).unwrap_or_default();
+            let raw_ops: Vec<String> =
+                serde_json::from_str(&fs::read_to_string(schedule)?).unwrap_or_default();
             let mut schedule_counts: HashMap<&str, usize> = HashMap::new();
             for op in raw_ops {
                 if let Some(&name) = OPS.iter().find(|&&n| op.contains(n)) {
@@ -830,26 +831,34 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 }
             }
 
-            // Code counts (strip comments first)
-            let code_src = fs::read_to_string(code)?;
-            let code_clean = comment_re.replace_all(&code_src, "").into_owned();
+            // Code counts: strip tags and comments, then count calls
+            let code_clean = comment_re
+                .replace_all(&html_tag_re.replace_all(&fs::read_to_string(code)?, ""), "")
+                .into_owned();
             let mut code_counts: HashMap<&str, usize> = HashMap::new();
-            for cap in code_re.captures_iter(&code_clean) {
-                let name = cap.get(1).unwrap().as_str();
-                *code_counts.entry(name).or_insert(0) += 1;
+            for base in call_re.captures_iter(&code_clean).filter_map(|cap| {
+                match cap.get(1).unwrap().as_str() {
+                    "all_reduce_" => Some("all_reduce"),
+                    "reduce_scatter_tensor" => Some("reduce_scatter"),
+                    "all_gather_into_tensor" => Some("all_gather"),
+                    "broadcast" => Some("broadcast"),
+                    "reduce" => Some("reduce"),
+                    "all_to_all" => Some("all_to_all"),
+                    _ => None,
+                }
+            }) {
+                *code_counts.entry(base).or_insert(0) += 1;
             }
 
             // Sum absolute differences across ops
             let offset: usize = OPS
                 .iter()
                 .map(|&n| {
-                    let s = *schedule_counts.get(n).unwrap_or(&0);
-                    let c = *code_counts.get(n).unwrap_or(&0);
-                    if s > c {
-                        s - c
-                    } else {
-                        c - s
-                    }
+                    schedule_counts
+                        .get(n)
+                        .copied()
+                        .unwrap_or(0)
+                        .abs_diff(code_counts.get(n).copied().unwrap_or(0))
                 })
                 .sum();
 
