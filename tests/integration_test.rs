@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use tempfile::tempdir;
-use tlparse;
+use tlparse::{self, parsers, CollectivesParityReport};
 
 fn prefix_exists(map: &HashMap<PathBuf, String>, prefix: &str) -> bool {
     map.keys()
@@ -1631,6 +1631,13 @@ fn test_all_ranks_basic() -> Result<(), Box<dyn std::error::Error>> {
     let landing_content = fs::read_to_string(landing_page).unwrap();
     assert!(landing_content.contains(r#"<a href="rank_0/index.html">"#));
     assert!(landing_content.contains(r#"<a href="rank_1/index.html">"#));
+    assert!(
+        !landing_content.contains("collectives_parity.json"),
+        "multi-rank landing page should not link collectives parity"
+    );
+
+    let rank0_content = fs::read_to_string(rank0_index).unwrap();
+    assert!(rank0_content.contains("collectives_parity.json"));
     Ok(())
 }
 
@@ -2433,6 +2440,43 @@ fn test_execution_order_multi_rank_divergence() -> anyhow::Result<()> {
     assert_eq!(row_2.by_rank.get(&0_u32), Some(&"0/2".to_string()));
     assert_eq!(row_2.by_rank.get(&1_u32), Some(&"0/2".to_string()));
     assert!(row_2.issues.is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn test_collectives_parity_detects_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+    let input_dir = PathBuf::from("tests/inputs/collectives_parity");
+    let temp_out = tempdir()?;
+    let out_dir = temp_out.path();
+
+    let mut cmd = Command::cargo_bin("tlparse")?;
+    cmd.arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser");
+    cmd.assert().success();
+
+    // Run collectives parity check on generated outputs
+    let out_dir_buf = out_dir.to_path_buf();
+    parsers::check_collectives_parity(&out_dir_buf, &[0, 1, 2])?;
+
+    // Verify rank 0 parity report exists and contains at least one mismatch
+    let rank_0_report_path = out_dir.join("rank_0").join("collectives_parity.json");
+    assert!(
+        rank_0_report_path.exists(),
+        "collectives_parity.json for rank 0 should exist"
+    );
+    let rank_0_report: CollectivesParityReport =
+        serde_json::from_str(&fs::read_to_string(&rank_0_report_path)?)?;
+    // Expect single mismatch entry for graph -_0_1_0 with compile_id [0/1] and offset 1
+    assert_eq!(rank_0_report.graphs.len(), 1);
+    let g = &rank_0_report.graphs[0];
+    assert_eq!(g.graph, "-_0_1_0");
+    assert_eq!(g.compile_id, "[0/1]");
+    assert_eq!(g.offset, 1);
 
     Ok(())
 }
