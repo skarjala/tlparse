@@ -2471,7 +2471,7 @@ fn test_collectives_parity_detects_mismatch() -> Result<(), Box<dyn std::error::
     );
     let rank_0_report: CollectivesParityReport =
         serde_json::from_str(&fs::read_to_string(&rank_0_report_path)?)?;
-    // Expect a single mismatch entry for graph -_0_1_0 with compile_id [0/1] and offset 1
+    // Expect single mismatch entry for graph -_0_1_0 with compile_id [0/1] and offset 1
     assert_eq!(rank_0_report.graphs.len(), 1);
     let g = &rank_0_report.graphs[0];
     assert_eq!(g.graph, "-_0_1_0");

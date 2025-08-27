@@ -749,18 +749,9 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
     use regex::Regex;
     use std::{collections::HashMap, fs};
 
-    const OPS: [&str; 6] = [
-        "all_reduce",
-        "reduce_scatter",
-        "all_gather",
-        "broadcast",
-        "reduce",
-        "all_to_all",
-    ];
-
     // Match c10d functional calls: torch.ops._c10d_functional.<op>.default(
     let call_re = Regex::new(
-        r"torch\s*\.\s*ops\s*\.\s*_?c10d_functional\s*\.\s*(reduce_scatter_tensor|all_gather_into_tensor|all_to_all|all_reduce_|broadcast|reduce)\s*\.\s*default\s*\(",
+        r"torch\s*\.\s*ops\s*\.\s*_?c10d_functional\s*\.\s*([A-Za-z0-9_]+)\s*\.\s*default\s*\(",
     )?;
     let comment_re = Regex::new(r"(?m)^\s*#.*$|\s#[^0-9a-fA-F].*$|//.*$|(?s)/\*.*?\*/")?;
     let html_tag_re = Regex::new(r"(?s)<[^>]*>")?;
@@ -824,10 +815,31 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
 
             let raw_ops: Vec<String> =
                 serde_json::from_str(&fs::read_to_string(schedule)?).unwrap_or_default();
+            // Extract and normalize op names from schedule
+            let normalize_op = |op: &str| -> Option<&'static str> {
+                let op = op.trim_end_matches('_');
+                [
+                    "all_reduce",
+                    "reduce_scatter",
+                    "all_gather",
+                    "broadcast",
+                    "all_to_all",
+                ]
+                .iter()
+                .find(|&&name| op.contains(name))
+                .copied()
+                .or_else(|| {
+                    (op.contains("reduce")
+                        && !op.contains("all_reduce")
+                        && !op.contains("reduce_scatter"))
+                    .then_some("reduce")
+                })
+            };
+
             let mut schedule_counts: HashMap<&str, usize> = HashMap::new();
-            for op in raw_ops {
-                if let Some(&name) = OPS.iter().find(|&&n| op.contains(n)) {
-                    *schedule_counts.entry(name).or_insert(0) += 1;
+            for op in &raw_ops {
+                if let Some(normalized) = normalize_op(op) {
+                    *schedule_counts.entry(normalized).or_insert(0) += 1;
                 }
             }
 
@@ -836,22 +848,17 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 .replace_all(&html_tag_re.replace_all(&fs::read_to_string(code)?, ""), "")
                 .into_owned();
             let mut code_counts: HashMap<&str, usize> = HashMap::new();
-            for base in call_re.captures_iter(&code_clean).filter_map(|cap| {
-                match cap.get(1).unwrap().as_str() {
-                    "all_reduce_" => Some("all_reduce"),
-                    "reduce_scatter_tensor" => Some("reduce_scatter"),
-                    "all_gather_into_tensor" => Some("all_gather"),
-                    "broadcast" => Some("broadcast"),
-                    "reduce" => Some("reduce"),
-                    "all_to_all" => Some("all_to_all"),
-                    _ => None,
+            for cap in call_re.captures_iter(&code_clean) {
+                if let Some(normalized) = normalize_op(cap.get(1).unwrap().as_str()) {
+                    *code_counts.entry(normalized).or_insert(0) += 1;
                 }
-            }) {
-                *code_counts.entry(base).or_insert(0) += 1;
             }
 
-            // Sum absolute differences across ops
-            let offset: usize = OPS
+            // Compute offset over union of all detected ops
+            let mut all_ops: std::collections::HashSet<&str> =
+                schedule_counts.keys().copied().collect();
+            all_ops.extend(code_counts.keys().copied());
+            let offset: usize = all_ops
                 .iter()
                 .map(|&n| {
                     schedule_counts
