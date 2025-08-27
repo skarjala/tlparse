@@ -58,6 +58,8 @@ pub struct GraphCollectivesParity {
     pub graph: String,
     pub compile_id: String,
     pub offset: usize,
+    #[serde(default)]
+    pub missing_waits: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

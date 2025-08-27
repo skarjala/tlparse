@@ -5217,7 +5217,7 @@ V0804 12:34:16.809000 1142857 torch/_inductor/graph.py:2390] {"inductor_output_c
 	        # Topologically Sorted Source Nodes: [h_1, h_2, all_reduce_default], Original ATen: [aten.gelu, aten.native_layer_norm, _c10d_functional.all_reduce]
 	        torch.ops._c10d_functional.all_reduce_.default(buf4, 'sum', '0')
 	        # Topologically Sorted Source Nodes: [h_3], Original ATen: [_c10d_functional.wait_tensor]
-	        torch.ops._c10d_functional.wait_tensor.default(buf4)
+	        #torch.ops._c10d_functional.wait_tensor.default(buf4)
 	        buf9 = empty_strided_cuda((1024, 1024), (1024, 1), torch.float16)
 	        # Topologically Sorted Source Nodes: [h2], Original ATen: [aten.mm]
 	        extern_kernels.mm(buf4, reinterpret_tensor(arg4_1, (1024, 1024), (1, 1024), 0), out=buf9)
@@ -5227,7 +5227,7 @@ V0804 12:34:16.809000 1142857 torch/_inductor/graph.py:2390] {"inductor_output_c
 	        stream0 = get_raw_stream(0)
 	        triton_poi_fused_all_gather_into_tensor_relu_1.run(buf10, 1048576, stream=stream0)
 	        # Topologically Sorted Source Nodes: [h2_1, all_gather_into_tensor_default], Original ATen: [aten.relu, _c10d_functional.all_gather_into_tensor]
-	        #buf11 = torch.ops._c10d_functional.all_gather_into_tensor.default(buf10, 2, '0')
+	        buf11 = torch.ops._c10d_functional.all_gather_into_tensor.default(buf10, 2, '0')
 	        assert_size_stride(buf11, (2048, 1024), (1024, 1), 'torch.ops._c10d_functional.all_gather_into_tensor.default')
 	        assert_alignment(buf11, 16, 'torch.ops._c10d_functional.all_gather_into_tensor.default')
 	        del buf4
@@ -5236,10 +5236,10 @@ V0804 12:34:16.809000 1142857 torch/_inductor/graph.py:2390] {"inductor_output_c
 	        assert_size_stride(buf12, (1024, 1024), (1024, 1), 'torch.ops._c10d_functional.reduce_scatter_tensor.default')
 	        assert_alignment(buf12, 16, 'torch.ops._c10d_functional.reduce_scatter_tensor.default')
 	        # Topologically Sorted Source Nodes: [gathered], Original ATen: [_c10d_functional.wait_tensor]
-	        torch.ops._c10d_functional.wait_tensor.default(buf11)
+	        #torch.ops._c10d_functional.wait_tensor.default(buf11)
 	        del buf10
 	        # Topologically Sorted Source Nodes: [rs], Original ATen: [_c10d_functional.wait_tensor]
-	        torch.ops._c10d_functional.wait_tensor.default(buf12)
+	        #torch.ops._c10d_functional.wait_tensor.default(buf12)
 	        del arg5_1
 	        buf17 = empty_strided_cuda((2048, 1024), (1024, 1), torch.float16)
 	        # Topologically Sorted Source Nodes: [g, rs_expanded, out], Original ATen: [aten.mul, aten.repeat, aten.add]

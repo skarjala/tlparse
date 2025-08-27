@@ -753,7 +753,7 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
     let call_re = Regex::new(
         r"torch\s*\.\s*ops\s*\.\s*_?c10d_functional\s*\.\s*([A-Za-z0-9_]+)\s*\.\s*default\s*\(",
     )?;
-    let comment_re = Regex::new(r"(?m)^\s*#.*$|\s#[^0-9a-fA-F].*$|//.*$|(?s)/\*.*?\*/")?;
+    let comment_re = Regex::new(r"(?m)#.*$|//.*$|(?s)/\*.*?\*/")?;
     let html_tag_re = Regex::new(r"(?s)<[^>]*>")?;
 
     for &rank in rank_nums {
@@ -787,7 +787,7 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 .unwrap_or_default();
 
         let mut report = crate::types::CollectivesParityReport {
-            description: "Difference of # of collectives in scheduler and inductor output code"
+            description: "Difference of # of collectives in scheduler and inductor output code and missing wait collectives"
                 .to_string(),
             graphs: Vec::new(),
         };
@@ -848,11 +848,17 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 .replace_all(&html_tag_re.replace_all(&fs::read_to_string(code)?, ""), "")
                 .into_owned();
             let mut code_counts: HashMap<&str, usize> = HashMap::new();
+            let mut wait_count = 0usize;
             for cap in call_re.captures_iter(&code_clean) {
-                if let Some(normalized) = normalize_op(cap.get(1).unwrap().as_str()) {
+                let op = cap.get(1).unwrap().as_str();
+                if op == "wait_tensor" {
+                    wait_count += 1;
+                } else if let Some(normalized) = normalize_op(op) {
                     *code_counts.entry(normalized).or_insert(0) += 1;
                 }
             }
+            let collective_total: usize = code_counts.values().sum();
+            let missing_waits = collective_total.saturating_sub(wait_count);
 
             // Compute offset over union of all detected ops
             let mut all_ops: std::collections::HashSet<&str> =
@@ -869,7 +875,7 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                 })
                 .sum();
 
-            if offset > 0 {
+            if offset > 0 || missing_waits > 0 {
                 let graph = compile_dir
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -883,6 +889,7 @@ pub fn check_collectives_parity(out_path: &PathBuf, rank_nums: &[u32]) -> anyhow
                     graph,
                     compile_id,
                     offset,
+                    missing_waits,
                 });
             }
         }

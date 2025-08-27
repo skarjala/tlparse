@@ -2471,12 +2471,20 @@ fn test_collectives_parity_detects_mismatch() -> Result<(), Box<dyn std::error::
     );
     let rank_0_report: CollectivesParityReport =
         serde_json::from_str(&fs::read_to_string(&rank_0_report_path)?)?;
-    // Expect single mismatch entry for graph -_0_1_0 with compile_id [0/1] and offset 1
-    assert_eq!(rank_0_report.graphs.len(), 1);
-    let g = &rank_0_report.graphs[0];
-    assert_eq!(g.graph, "-_0_1_0");
+    // Expect mismatches: graph -_0_1_0 has offset 1, graph -_0_0_0 missing wait
+    assert_eq!(rank_0_report.graphs.len(), 2);
+    let mut by_graph = HashMap::new();
+    for g in &rank_0_report.graphs {
+        by_graph.insert(g.graph.as_str(), g);
+    }
+    let g = by_graph.get("-_0_1_0").expect("missing -_0_1_0 entry");
     assert_eq!(g.compile_id, "[0/1]");
-    assert_eq!(g.offset, 1);
+    assert_eq!(g.offset, 0);
+    assert_eq!(g.missing_waits, 3);
+    let g0 = by_graph.get("-_0_0_0").expect("missing -_0_0_0 entry");
+    assert_eq!(g0.compile_id, "[0/0]");
+    assert_eq!(g0.offset, 0);
+    assert_eq!(g0.missing_waits, 1);
 
     Ok(())
 }
