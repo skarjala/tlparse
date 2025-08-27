@@ -29,6 +29,11 @@ pub use types::{
     RankMetaData, RuntimeAnalysis, RuntimeRankDetail,
 };
 
+pub use execution_order::{
+    analyze_execution_order, parse_graph_execution_order, ExecOrderIndexRow, ExecOrderIssue,
+    ExecOrderReport,
+};
+
 #[derive(Debug)]
 enum ParserResult {
     NoPayload,
@@ -1794,4 +1799,139 @@ fn convert_node_mappings_to_line_numbers(
         "cppCodeToPost": hashmap_to_json_map(line_cpp_code_to_post),
         "postToCppCode": hashmap_to_json_map(line_post_to_cpp_code)
     })
+}
+
+pub mod execution_order {
+    use fxhash::FxHashMap;
+
+    /// Issue types detected at a given execution index across ranks
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ExecOrderIssue {
+        ScheduleMismatch,
+        CacheMismatch,
+    }
+
+    /// One row in the execution-order report
+    #[derive(Debug, Clone)]
+    pub struct ExecOrderIndexRow {
+        /// Zero-based index into per-rank execution orders
+        pub index: usize,
+        /// Mapping: rank -> compile_id (compile directory name)
+        pub by_rank: FxHashMap<u32, String>,
+        /// Issues found for this index
+        pub issues: Vec<ExecOrderIssue>,
+    }
+
+    /// Final report for execution-order diagnostics
+    #[derive(Debug, Clone, Default)]
+    pub struct ExecOrderReport {
+        pub by_index: Vec<ExecOrderIndexRow>,
+    }
+
+    /// Analyze per-rank execution orders, aligning entries by index and flagging issues
+    /// using provided per-graph properties.
+    ///
+    /// - `exec_orders`: rank -> ordered list of compile_id directory names
+    /// - `collective_schedule_by_graph`: (rank, compile_id) -> schedule ops sequence
+    /// - `cache_status`: (rank, compile_id) -> cache status marker (e.g., "✅", "❌", "❓")
+    pub fn analyze_execution_order(
+        exec_orders: &FxHashMap<u32, Vec<String>>,
+        collective_schedule_by_graph: &FxHashMap<(u32, String), Vec<String>>,
+        cache_status: &FxHashMap<(u32, String), String>,
+    ) -> ExecOrderReport {
+        // Determine max length across ranks (N)
+        let max_len = exec_orders.values().map(|v| v.len()).max().unwrap_or(0);
+
+        // Fast no-op
+        if max_len == 0 || exec_orders.is_empty() {
+            return ExecOrderReport::default();
+        }
+
+        // Memoize property lookups per (rank, compile_id)
+        let mut sched_memo: FxHashMap<(u32, String), Option<Vec<String>>> = FxHashMap::default();
+        let mut cache_memo: FxHashMap<(u32, String), Option<String>> = FxHashMap::default();
+
+        let mut rows: Vec<ExecOrderIndexRow> = Vec::with_capacity(max_len);
+
+        for idx in 0..max_len {
+            // Gather present ranks and their compile_ids at this index
+            let by_rank: FxHashMap<u32, String> = exec_orders
+                .iter()
+                .filter_map(|(&rank, order)| order.get(idx).cloned().map(|cid| (rank, cid)))
+                .collect();
+
+            if by_rank.is_empty() {
+                continue;
+            }
+
+            // Evaluate issues among present ranks
+            let mut issues: Vec<ExecOrderIssue> = Vec::new();
+
+            // Schedule mismatch: compare collective op sequences
+            {
+                let schedules: Vec<Vec<String>> = by_rank
+                    .iter()
+                    .filter_map(|(&rank, cid)| {
+                        let key = (rank, cid.clone());
+                        let entry = sched_memo
+                            .entry((rank, cid.clone()))
+                            .or_insert_with(|| collective_schedule_by_graph.get(&key).cloned());
+                        entry.clone()
+                    })
+                    .collect();
+                if schedules.len() >= 2 && schedules[1..].iter().any(|s| s != &schedules[0]) {
+                    issues.push(ExecOrderIssue::ScheduleMismatch);
+                }
+            }
+
+            // Cache skew: compare cache status markers
+            {
+                let statuses: Vec<String> = by_rank
+                    .iter()
+                    .filter_map(|(&rank, cid)| {
+                        let key = (rank, cid.clone());
+                        let entry = cache_memo
+                            .entry((rank, cid.clone()))
+                            .or_insert_with(|| cache_status.get(&key).cloned());
+                        entry.clone().filter(|s| !s.is_empty())
+                    })
+                    .collect();
+                if statuses.len() >= 2 && statuses[1..].iter().any(|s| s != &statuses[0]) {
+                    issues.push(ExecOrderIssue::CacheMismatch);
+                }
+            }
+
+            rows.push(ExecOrderIndexRow {
+                index: idx,
+                by_rank,
+                issues,
+            });
+        }
+
+        ExecOrderReport { by_index: rows }
+    }
+
+    /// Parse the JSON payload for `artifact.name = "graph_execution"` and extract
+    /// the `graph_execution_order` sequence.
+    pub fn parse_graph_execution_order(payload: &str) -> anyhow::Result<Vec<String>> {
+        let value: serde_json::Value = serde_json::from_str(payload)?;
+        let arr = value
+            .get("graph_execution_order")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| anyhow::anyhow!("missing graph_execution_order array"))?;
+
+        let mut out = Vec::with_capacity(arr.len());
+        for item in arr {
+            match item {
+                serde_json::Value::String(s) => out.push(s.clone()),
+                serde_json::Value::Object(map) => {
+                    if let Some(s) = map.get("compile_id").and_then(|v| v.as_str()) {
+                        out.push(s.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(out)
+    }
 }
