@@ -2365,3 +2365,74 @@ fn test_tensor_meta_divergence_groups() -> Result<(), Box<dyn std::error::Error>
 
     Ok(())
 }
+
+#[test]
+fn test_execution_order_multi_rank_divergence() -> anyhow::Result<()> {
+    // Test data: Two ranks with different execution orders
+    let exec_orders: fxhash::FxHashMap<u32, Vec<String>> = vec![
+        (
+            0_u32,
+            vec!["0/0".to_string(), "0/1".to_string(), "0/2".to_string()],
+        ),
+        (
+            1_u32,
+            vec!["0/1".to_string(), "0/0".to_string(), "0/2".to_string()],
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    // Mock collective schedules - different at index 0
+    let collective_schedule_by_graph: fxhash::FxHashMap<(u32, String), Vec<String>> = vec![
+        ((0_u32, "0/0".to_string()), vec!["all_reduce".to_string()]),
+        ((0_u32, "0/1".to_string()), vec!["all_gather".to_string()]),
+        ((1_u32, "0/0".to_string()), vec!["all_reduce".to_string()]),
+        ((1_u32, "0/1".to_string()), vec!["broadcast".to_string()]), // Different!
+    ]
+    .into_iter()
+    .collect();
+
+    // Mock cache status - different at index 1
+    let cache_status: fxhash::FxHashMap<(u32, String), String> = vec![
+        ((0_u32, "0/0".to_string()), "✅".to_string()),
+        ((0_u32, "0/1".to_string()), "❌".to_string()),
+        ((1_u32, "0/0".to_string()), "✅".to_string()),
+        ((1_u32, "0/1".to_string()), "✅".to_string()), // Different!
+    ]
+    .into_iter()
+    .collect();
+
+    let report = tlparse::execution_order::analyze_execution_order(
+        &exec_orders,
+        &collective_schedule_by_graph,
+        &cache_status,
+    );
+
+    assert_eq!(report.by_index.len(), 3);
+
+    // Index 0: Rank 0 has "0/0", Rank 1 has "0/1"
+    // Should detect collective schedule mismatch
+    let row_0 = &report.by_index[0];
+    assert_eq!(row_0.by_rank.get(&0_u32), Some(&"0/0".to_string()));
+    assert_eq!(row_0.by_rank.get(&1_u32), Some(&"0/1".to_string()));
+    assert!(row_0
+        .issues
+        .contains(&tlparse::execution_order::ExecOrderIssue::ScheduleMismatch));
+
+    // Index 1: Rank 0 has "0/1", Rank 1 has "0/0"
+    // Should detect cache mismatch
+    let row_1 = &report.by_index[1];
+    assert_eq!(row_1.by_rank.get(&0_u32), Some(&"0/1".to_string()));
+    assert_eq!(row_1.by_rank.get(&1_u32), Some(&"0/0".to_string()));
+    assert!(row_1
+        .issues
+        .contains(&tlparse::execution_order::ExecOrderIssue::CacheMismatch));
+
+    // Index 2: Both ranks have "0/2" - no issues
+    let row_2 = &report.by_index[2];
+    assert_eq!(row_2.by_rank.get(&0_u32), Some(&"0/2".to_string()));
+    assert_eq!(row_2.by_rank.get(&1_u32), Some(&"0/2".to_string()));
+    assert!(row_2.issues.is_empty());
+
+    Ok(())
+}
