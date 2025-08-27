@@ -1830,10 +1830,6 @@ pub mod execution_order {
 
     /// Analyze per-rank execution orders, aligning entries by index and flagging issues
     /// using provided per-graph properties.
-    ///
-    /// - `exec_orders`: rank -> ordered list of compile_id directory names
-    /// - `collective_schedule_by_graph`: (rank, compile_id) -> schedule ops sequence
-    /// - `cache_status`: (rank, compile_id) -> cache status marker (e.g., "✅", "❌", "❓")
     pub fn analyze_execution_order(
         exec_orders: &FxHashMap<u32, Vec<String>>,
         collective_schedule_by_graph: &FxHashMap<(u32, String), Vec<String>>,
@@ -1842,7 +1838,6 @@ pub mod execution_order {
         // Determine max length across ranks (N)
         let max_len = exec_orders.values().map(|v| v.len()).max().unwrap_or(0);
 
-        // Fast no-op
         if max_len == 0 || exec_orders.is_empty() {
             return ExecOrderReport::default();
         }
@@ -1911,8 +1906,6 @@ pub mod execution_order {
         ExecOrderReport { by_index: rows }
     }
 
-    /// Parse the JSON payload for `artifact.name = "graph_execution"` and extract
-    /// the `graph_execution_order` sequence.
     pub fn parse_graph_execution_order(payload: &str) -> anyhow::Result<Vec<String>> {
         let value: serde_json::Value = serde_json::from_str(payload)?;
         let arr = value

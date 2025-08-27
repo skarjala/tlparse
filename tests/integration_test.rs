@@ -2378,7 +2378,6 @@ fn test_execution_order_multi_rank_divergence() -> anyhow::Result<()> {
             1_u32,
             vec!["0/1".to_string(), "0/0".to_string(), "0/2".to_string()],
         ),
-        //           ^^^^^ ^^^^^ Different order at index 0 and 1
     ]
     .into_iter()
     .collect();
