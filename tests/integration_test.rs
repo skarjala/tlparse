@@ -398,6 +398,70 @@ fn test_export_guard_report() {
 }
 
 #[test]
+fn test_execution_order_end_to_end() {
+    // Build exec orders from JSON payloads (parser + analyzer together)
+    let p0 = r#"{"graph_execution_order": ["G1", {"graph":"G2"}, {"compile_id":"G3"}, {"id":"G4"}]}"#;
+    let p1 = r#"{"graph_execution_order": ["G1", "G2", "G3"]}"#;
+    let seq0 = tlparse::execution_order::parse_graph_execution_order(p0).unwrap();
+    let seq1 = tlparse::execution_order::parse_graph_execution_order(p1).unwrap();
+    let exec_orders: fxhash::FxHashMap<u32, Vec<String>> =
+        vec![(0_u32, seq0), (1_u32, seq1)].into_iter().collect();
+
+    // Collective schedules: equal at idx0, mismatch at idx1, equal at idx2, only rank0 at idx3
+    let collective: fxhash::FxHashMap<(u32, String), Vec<String>> = vec![
+        ((0_u32, "G1".into()), vec!["op".into()]),
+        ((1_u32, "G1".into()), vec!["op".into()]),
+        ((0_u32, "G2".into()), vec!["all_reduce".into(), "barrier".into()]),
+        ((1_u32, "G2".into()), vec!["barrier".into(), "all_reduce".into()]),
+        ((0_u32, "G3".into()), vec!["noop".into()]),
+        ((1_u32, "G3".into()), vec!["noop".into()]),
+        ((0_u32, "G4".into()), vec!["noop".into()]),
+    ]
+    .into_iter()
+    .collect();
+
+    // Cache statuses: equal at idx0, blank on rank1 at idx1 (ignored), skew at idx2, rank0-only at idx3
+    let cache: fxhash::FxHashMap<(u32, String), String> = vec![
+        ((0_u32, "G1".into()), "✅".into()),
+        ((1_u32, "G1".into()), "✅".into()),
+        ((0_u32, "G2".into()), "✅".into()),
+        ((1_u32, "G2".into()), "".into()),
+        ((0_u32, "G3".into()), "✅".into()),
+        ((1_u32, "G3".into()), "❌".into()),
+        ((0_u32, "G4".into()), "❌".into()),
+    ]
+    .into_iter()
+    .collect();
+
+    let report = tlparse::execution_order::analyze_execution_order(&exec_orders, &collective, &cache);
+    assert_eq!(report.by_index.len(), 4);
+
+    // idx0: both ranks present, equal schedules and cache => no issues
+    assert_eq!(report.by_index[0].by_rank.len(), 2);
+    assert!(report.by_index[0].issues.is_empty());
+
+    // idx1: both ranks present, schedule mismatch; blank cache ignored => only ScheduleMismatch
+    assert!(report.by_index[1]
+        .issues
+        .iter()
+        .any(|&i| i == tlparse::execution_order::ExecOrderIssue::ScheduleMismatch));
+    assert!(!report.by_index[1]
+        .issues
+        .iter()
+        .any(|&i| i == tlparse::execution_order::ExecOrderIssue::CacheSkew));
+
+    // idx2: cache skew across ranks
+    assert!(report.by_index[2]
+        .issues
+        .iter()
+        .any(|&i| i == tlparse::execution_order::ExecOrderIssue::CacheSkew));
+
+    // idx3: only rank0 present => nothing to compare
+    assert_eq!(report.by_index[3].by_rank.len(), 1);
+    assert!(report.by_index[3].issues.is_empty());
+}
+
+#[test]
 fn test_provenance_tracking_aot_cuda() {
     let expected_files = [
         "-_-_-_-/before_pre_grad_graph_0.txt",
