@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use fxhash::{FxHashMap, FxHashSet};
 use tlparse::{
-    analyze_graph_runtime_deltas, generate_multi_rank_html, parse_path,
+    analyze_graph_runtime_deltas, build_exec_order_summary, generate_multi_rank_html, parse_path,
     read_chromium_events_with_pid, ArtifactFlags, Diagnostics, DivergenceFlags, DivergenceGroup,
     ParseConfig, RankMetaData,
 };
@@ -549,6 +549,8 @@ fn handle_all_ranks(
         out_path.display()
     );
 
+    let exec_order_summary = build_exec_order_summary(&out_path, &rank_nums, &collective_schedules);
+
     let diagnostics = Diagnostics {
         divergence: DivergenceFlags {
             cache: cache_seq_groups.len() > 1,
@@ -562,6 +564,7 @@ fn handle_all_ranks(
         cache_groups: cache_divergence_groups.clone(),
         collective_groups: collective_divergence_groups.clone(),
         tensor_meta_groups: tensor_meta_divergence_groups.clone(),
+        exec_order: exec_order_summary,
     };
 
     let (landing_page_path, landing_html) = generate_multi_rank_html(

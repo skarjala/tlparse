@@ -25,9 +25,9 @@ mod templates;
 mod types;
 
 pub use types::{
-    ArtifactFlags, CollectivesParityReport, Diagnostics, DivergenceFlags, DivergenceGroup,
-    GraphAnalysis, GraphCollectivesParity, GraphRuntime, RankMetaData, RuntimeAnalysis,
-    RuntimeRankDetail,
+    ArtifactFlags, CollectiveSchedule, CollectivesParityReport, Diagnostics, DivergenceFlags,
+    DivergenceGroup, ExecOrderSummary, GraphAnalysis, GraphCollectivesParity, GraphRuntime,
+    RankMetaData, RuntimeAnalysis, RuntimeRankDetail,
 };
 
 pub use execution_order::{
@@ -1290,6 +1290,220 @@ pub fn generate_multi_rank_html(
     Ok((landing_page_path, html))
 }
 
+/// Build ExecOrderSummary from artifacts under out_path for the given ranks
+pub fn build_exec_order_summary(
+    out_path: &PathBuf,
+    rank_nums: &[u32],
+    collective_schedules: &[CollectiveSchedule],
+) -> Option<ExecOrderSummary> {
+    use crate::execution_order::{
+        analyze_execution_order, parse_graph_execution_order, ExecOrderIssue,
+    };
+    use std::collections::HashSet;
+
+    // Preload and parse compile_directory.json per rank
+    let cd_by_rank: FxHashMap<u32, serde_json::Map<String, serde_json::Value>> = rank_nums
+        .iter()
+        .filter_map(|&rank| {
+            let path = out_path
+                .join(format!("rank_{rank}"))
+                .join("compile_directory.json");
+            std::fs::read_to_string(path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                .and_then(|val| match val {
+                    serde_json::Value::Object(map) => Some((rank, map)),
+                    _ => None,
+                })
+        })
+        .collect();
+
+    // Collect latest "graph_execution" artifact per rank
+    let exec_orders: FxHashMap<u32, Vec<String>> = rank_nums
+        .iter()
+        .filter_map(|&rank| {
+            let map = cd_by_rank.get(&rank)?;
+            let rank_dir = out_path.join(format!("rank_{rank}"));
+
+            // Find latest graph_execution artifact
+            let best = map
+                .values()
+                .filter_map(|entry| entry.get("artifacts")?.as_array())
+                .flat_map(|arts| arts.iter())
+                .filter_map(|a| {
+                    let name = a.get("name")?.as_str()?;
+                    if !name.contains("graph_execution") || !name.ends_with(".json") {
+                        return None;
+                    }
+                    Some((
+                        a.get("number")?.as_u64()?,
+                        a.get("url")?.as_str()?.to_string(),
+                    ))
+                })
+                .max_by_key(|(num, _)| *num)?;
+
+            let path = rank_dir.join(best.1);
+            let order = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|payload| parse_graph_execution_order(&payload).ok())
+                .map(|order| order.into_iter().map(|s| format!("[{}]", s)).collect())?;
+            Some((rank, order))
+        })
+        .collect();
+
+    if exec_orders.len() < 2 {
+        return None;
+    }
+
+    // Build dir -> compile_id mapping per rank
+    let dir_to_compile_id_per_rank: FxHashMap<u32, FxHashMap<String, String>> = rank_nums
+        .iter()
+        .filter_map(|&rank| {
+            let obj = cd_by_rank.get(&rank)?;
+            let mapping = obj
+                .iter()
+                .flat_map(|(cid, entry)| {
+                    entry
+                        .get("artifacts")
+                        .and_then(|x| x.as_array())
+                        .map(|arts| {
+                            arts.iter()
+                                .filter_map(|a| {
+                                    let url = a.get("url")?.as_str()?;
+                                    let prefix = url.split_once('/')?.0;
+                                    Some((prefix.to_string(), cid.to_string()))
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+                .fold(FxHashMap::default(), |mut acc, (prefix, cid)| {
+                    acc.entry(prefix).or_insert(cid);
+                    acc
+                });
+            Some((rank, mapping))
+        })
+        .collect();
+
+    // Build collective ops mapping
+    let collective_by_graph: FxHashMap<(u32, String), Vec<String>> = collective_schedules
+        .iter()
+        .filter_map(|cs| {
+            let m = dir_to_compile_id_per_rank.get(&cs.rank)?;
+            let compile_id = m
+                .get(&cs.graph)
+                .cloned()
+                .unwrap_or_else(|| cs.graph.clone());
+            Some(((cs.rank, compile_id), cs.ops.clone()))
+        })
+        .fold(FxHashMap::default(), |mut acc, (key, ops)| {
+            acc.entry(key).or_default().extend(ops);
+            acc
+        });
+
+    // Build cache status mapping
+    let cache_status: FxHashMap<(u32, String), String> = rank_nums
+        .iter()
+        .flat_map(|&rank| {
+            cd_by_rank
+                .get(&rank)
+                .and_then(|obj| {
+                    dir_to_compile_id_per_rank
+                        .get(&rank)
+                        .map(|dir2cid| (obj, dir2cid))
+                })
+                .map(|(obj, dir2cid)| {
+                    let status_by_dir = obj
+                        .values()
+                        .filter_map(|entry| entry.get("artifacts").and_then(|x| x.as_array()))
+                        .flat_map(|arts| arts.iter())
+                        .filter_map(|a| {
+                            let url = a.get("url")?.as_str()?;
+                            let prefix = url.split_once('/')?.0.to_string();
+                            let name = a.get("name")?.as_str()?;
+                            let status = match () {
+                                _ if name.contains("cache_miss") => ("miss", 3),
+                                _ if name.contains("cache_hit") => ("hit", 2),
+                                _ if name.contains("cache_bypass") => ("bypass", 1),
+                                _ => return None,
+                            };
+                            Some((prefix, status))
+                        })
+                        .fold(
+                            FxHashMap::default(),
+                            |mut acc, (prefix, (status, priority))| {
+                                acc.entry(prefix)
+                                    .and_modify(|e: &mut (&str, u8)| {
+                                        if priority > e.1 {
+                                            *e = (status, priority);
+                                        }
+                                    })
+                                    .or_insert((status, priority));
+                                acc
+                            },
+                        );
+
+                    status_by_dir
+                        .into_iter()
+                        .filter_map(|(dir, (st, _))| {
+                            let cid = dir2cid.get(&dir)?;
+                            Some(((rank, cid.clone()), st.to_string()))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+
+    // Analyze and create summary
+    let report = analyze_execution_order(&exec_orders, &collective_by_graph, &cache_status);
+
+    let order_differs = report.by_index.iter().any(|row| {
+        let uniq: HashSet<_> = row.by_rank.values().map(String::as_str).collect();
+        uniq.len() > 1
+    });
+
+    let (sched_set, cache_set) = report.by_index.iter().fold(
+        (HashSet::new(), HashSet::new()),
+        |(mut sched, mut cache), row| {
+            if row.issues.contains(&ExecOrderIssue::ScheduleMismatch) {
+                sched.extend(row.by_rank.keys());
+            }
+            if row.issues.contains(&ExecOrderIssue::CacheMismatch) {
+                cache.extend(row.by_rank.keys());
+            }
+            (sched, cache)
+        },
+    );
+
+    let mut ranks_schedule: Vec<u32> = sched_set.into_iter().collect();
+    let mut ranks_cache: Vec<u32> = cache_set.into_iter().collect();
+    ranks_schedule.sort_unstable();
+    ranks_cache.sort_unstable();
+
+    let format_ranks = |ranks: &[u32]| {
+        if ranks.is_empty() {
+            String::new()
+        } else {
+            ranks
+                .iter()
+                .map(|r| format!("Rank {r}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    };
+
+    Some(ExecOrderSummary {
+        order_differs,
+        has_schedule_mismatch: !ranks_schedule.is_empty(),
+        has_cache_mismatch: !ranks_cache.is_empty(),
+        ranks_schedule_str: format_ranks(&ranks_schedule),
+        ranks_cache_str: format_ranks(&ranks_cache),
+        ranks_schedule,
+        ranks_cache,
+    })
+}
+
 fn prepare_and_validate_graphs(
     runtime_estimations: &[GraphRuntime],
 ) -> Option<(
@@ -1863,7 +2077,7 @@ pub mod execution_order {
             // Evaluate issues among present ranks
             let mut issues: Vec<ExecOrderIssue> = Vec::new();
 
-            // Schedule mismatch: compare collective op sequences
+            // Schedule mismatch: compare collective schedules regardless of compile_id
             {
                 let schedules: Vec<Vec<String>> = by_rank
                     .iter()
@@ -1880,7 +2094,7 @@ pub mod execution_order {
                 }
             }
 
-            // Cache skew: compare cache status markers
+            // Cache mismatch: compare cache statuses regardless of compile_id
             {
                 let statuses: Vec<String> = by_rank
                     .iter()
