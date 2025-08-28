@@ -621,6 +621,26 @@ desync issues on specific ranks.
 {{ endfor }}
 {{ endif }}
 {{ endif }}
+<h3>Graph Execution-Order Diagnostics</h3>
+{{ if diagnostics.exec_order }}
+  {{ if diagnostics.exec_order.order_differs }}
+  <p>Graph execution order differs across ranks.</p>
+  {{ else }}
+  <p>Graph execution order: consistent across ranks.</p>
+  {{ endif }}
+  {{ if diagnostics.exec_order.has_schedule_mismatch }}
+  <p><strong>Warning:</strong> Schedule mismatch across ranks: {diagnostics.exec_order.ranks_schedule_str}</p>
+  {{ else }}
+  <p>Collectives Schedule: Consistent across ranks.</p>
+  {{ endif }}
+  {{ if diagnostics.exec_order.has_cache_mismatch }}
+  <p><strong>Warning:</strong> Cache hit/miss mismatch across ranks: {diagnostics.exec_order.ranks_cache_str}</p>
+  {{ else }}
+  <p>Cache hit/miss sequence: Consistent across ranks.</p>
+  {{ endif }}
+{{ else }}
+<p>Execution-order analysis unavailable.</p>
+{{ endif }}
 <h3>Tensor Metadata Analysis</h3>
 <p>
 Compares inductor tensor metadata (shapes, dtypes, strides) across ranks to detect compilation divergence.

@@ -930,6 +930,24 @@ pub struct ArtifactFlags {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct ExecOrderSummary {
+    /// True if any index has differing compile_ids across ranks
+    pub order_differs: bool,
+    /// Ranks involved in any schedule mismatches (sorted numerically)
+    pub ranks_schedule: Vec<u32>,
+    /// Ranks involved in any cache hit/miss mismatches (sorted numerically)
+    pub ranks_cache: Vec<u32>,
+    /// True if there is any schedule mismatch
+    pub has_schedule_mismatch: bool,
+    /// True if there is any cache hit/miss mismatch
+    pub has_cache_mismatch: bool,
+    /// Pretty-printed ranks for template rendering (e.g., "r0, r1, r2")
+    pub ranks_schedule_str: String,
+    /// Pretty-printed ranks for template rendering (e.g., "r0, r2")
+    pub ranks_cache_str: String,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Diagnostics {
     pub divergence: DivergenceFlags,
     pub artifacts: ArtifactFlags,
@@ -937,6 +955,7 @@ pub struct Diagnostics {
     pub cache_groups: Vec<DivergenceGroup>,
     pub collective_groups: Vec<DivergenceGroup>,
     pub tensor_meta_groups: Vec<DivergenceGroup>,
+    pub exec_order: Option<ExecOrderSummary>,
 }
 
 #[derive(Serialize)]

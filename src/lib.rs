@@ -26,8 +26,8 @@ mod types;
 
 pub use types::{
     ArtifactFlags, CollectivesParityReport, Diagnostics, DivergenceFlags, DivergenceGroup,
-    GraphAnalysis, GraphCollectivesParity, GraphRuntime, RankMetaData, RuntimeAnalysis,
-    RuntimeRankDetail,
+    ExecOrderSummary, GraphAnalysis, GraphCollectivesParity, GraphRuntime, RankMetaData,
+    RuntimeAnalysis, RuntimeRankDetail,
 };
 
 pub use execution_order::{
@@ -1863,37 +1863,51 @@ pub mod execution_order {
             // Evaluate issues among present ranks
             let mut issues: Vec<ExecOrderIssue> = Vec::new();
 
-            // Schedule mismatch: compare collective op sequences
+            // Schedule mismatch: only compare sequences when all present ranks execute the SAME compile_id at this index
             {
-                let schedules: Vec<Vec<String>> = by_rank
-                    .iter()
-                    .filter_map(|(&rank, cid)| {
-                        let key = (rank, cid.clone());
-                        let entry = sched_memo
-                            .entry((rank, cid.clone()))
-                            .or_insert_with(|| collective_schedule_by_graph.get(&key).cloned());
-                        entry.clone()
-                    })
-                    .collect();
-                if schedules.len() >= 2 && schedules[1..].iter().any(|s| s != &schedules[0]) {
-                    issues.push(ExecOrderIssue::ScheduleMismatch);
+                let mut uniq_cids: std::collections::HashSet<&str> =
+                    std::collections::HashSet::new();
+                for cid in by_rank.values() {
+                    uniq_cids.insert(cid.as_str());
+                }
+                if uniq_cids.len() == 1 {
+                    let schedules: Vec<Vec<String>> = by_rank
+                        .iter()
+                        .filter_map(|(&rank, cid)| {
+                            let key = (rank, cid.clone());
+                            let entry = sched_memo
+                                .entry((rank, cid.clone()))
+                                .or_insert_with(|| collective_schedule_by_graph.get(&key).cloned());
+                            entry.clone()
+                        })
+                        .collect();
+                    if schedules.len() >= 2 && schedules[1..].iter().any(|s| s != &schedules[0]) {
+                        issues.push(ExecOrderIssue::ScheduleMismatch);
+                    }
                 }
             }
 
-            // Cache skew: compare cache status markers
+            // Cache skew: only compare markers when all present ranks execute the SAME compile_id at this index
             {
-                let statuses: Vec<String> = by_rank
-                    .iter()
-                    .filter_map(|(&rank, cid)| {
-                        let key = (rank, cid.clone());
-                        let entry = cache_memo
-                            .entry((rank, cid.clone()))
-                            .or_insert_with(|| cache_status.get(&key).cloned());
-                        entry.clone().filter(|s| !s.is_empty())
-                    })
-                    .collect();
-                if statuses.len() >= 2 && statuses[1..].iter().any(|s| s != &statuses[0]) {
-                    issues.push(ExecOrderIssue::CacheMismatch);
+                let mut uniq_cids: std::collections::HashSet<&str> =
+                    std::collections::HashSet::new();
+                for cid in by_rank.values() {
+                    uniq_cids.insert(cid.as_str());
+                }
+                if uniq_cids.len() == 1 {
+                    let statuses: Vec<String> = by_rank
+                        .iter()
+                        .filter_map(|(&rank, cid)| {
+                            let key = (rank, cid.clone());
+                            let entry = cache_memo
+                                .entry((rank, cid.clone()))
+                                .or_insert_with(|| cache_status.get(&key).cloned());
+                            entry.clone().filter(|s| !s.is_empty())
+                        })
+                        .collect();
+                    if statuses.len() >= 2 && statuses[1..].iter().any(|s| s != &statuses[0]) {
+                        issues.push(ExecOrderIssue::CacheMismatch);
+                    }
                 }
             }
 

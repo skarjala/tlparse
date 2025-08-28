@@ -2488,3 +2488,33 @@ fn test_collectives_parity_detects_mismatch() -> Result<(), Box<dyn std::error::
 
     Ok(())
 }
+
+#[test]
+fn test_graph_execution_order_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
+    let input_dir = PathBuf::from("tests/graph_exec_order_tests");
+    let temp_out = tempdir()?;
+    let out_dir = temp_out.path();
+
+    let mut cmd = Command::cargo_bin("tlparse")?;
+    cmd.arg(&input_dir)
+        .arg("--all-ranks-html")
+        .arg("--overwrite")
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-browser");
+    cmd.assert().success();
+
+    let landing_page = out_dir.join("index.html");
+    assert!(landing_page.exists(), "Landing page should exist");
+
+    let html_content = fs::read_to_string(&landing_page)?;
+
+    assert!(html_content.contains("Graph Execution-Order Diagnostics"));
+
+    assert!(html_content.contains("Graph execution order differs across ranks"));
+
+    assert!(html_content.contains("Cache hit/miss sequence: Consistent across ranks"));
+    assert!(!html_content.contains("Warning:</strong> Cache hit/miss mismatch across ranks"));
+
+    Ok(())
+}
