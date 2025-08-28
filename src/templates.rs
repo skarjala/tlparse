@@ -622,6 +622,7 @@ desync issues on specific ranks.
 {{ endif }}
 {{ endif }}
 <h3>Graph Execution-Order Diagnostics</h3>
+<p>Note: To enable this feature, wrap your code with torch._inductor.debug.record_and_log_graph_execution_order()</p>
 {{ if diagnostics.exec_order }}
   {{ if diagnostics.exec_order.order_differs }}
   <p>Graph execution order differs across ranks.</p>
