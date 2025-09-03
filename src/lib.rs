@@ -1303,7 +1303,7 @@ pub fn generate_multi_rank_landing(
     cfg: &ParseConfig,
     ctx: &MultiRankContext,
     out_dir: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<PathBuf> {
     use std::fs;
 
     // Parse ranks from context and ensure sorted numerically like the CLI
@@ -1673,7 +1673,7 @@ pub fn generate_multi_rank_landing(
     )?;
     fs::write(&landing_page_path, landing_html)?;
 
-    Ok(())
+    Ok(landing_page_path)
 }
 
 /// Build ExecOrderSummary from artifacts under out_path for the given ranks

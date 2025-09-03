@@ -252,10 +252,9 @@ fn handle_all_ranks(
         diagnostics: Default::default(),
     };
 
-    generate_multi_rank_landing(cfg, &ctx, &out_path)?;
+    let landing_page_path = generate_multi_rank_landing(cfg, &ctx, &out_path)?;
 
     if open_browser {
-        let landing_page_path = out_path.join("index.html");
         opener::open(&landing_page_path)?;
     }
 
